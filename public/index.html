@@ -3,7 +3,15 @@
 	<head>
 		<title>LogicGatesJS</title>
         <link rel="icon" type="image/png" href="/assets/comp.png" />
-        <script src="app.js"></script>
+        <script type="importmap">
+            {
+                "imports": {
+                    "utils/graph": "./scripts/utils/graph.js"
+                }
+            }
+        </script>          
+        <!-- <script type="module" src="scripts/utils/graph.js"></script> -->
+        <script type="module" src="scripts/app.js"></script>
 	</head>
     <body>
         Hello World
