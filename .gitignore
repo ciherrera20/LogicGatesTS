@@ -131,4 +131,4 @@ dist
 
 # JS compiled from TS
 build
-public/*.js
+public/**/*.js

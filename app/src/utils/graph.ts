@@ -10,7 +10,7 @@ interface DirectedGraph<V> {
     removeVertex:                   { (this: DirectedGraph<V>, v: V): void }
     checkEdge:                      { (this: DirectedGraph<V>, v: V, w: V): boolean }
     addEdge:                        { (this: DirectedGraph<V>, v: V, w: V): void }
-    removeEdge:                     { (this: DirectedGraph<V>, v: V, w: V): boolean }
+    removeEdge:                     { (this: DirectedGraph<V>, v: V, w: V): void }
     getShortestPaths:               { (this: DirectedGraph<V>, source: V): Map<V, number> }
     getStronglyConnectedComponents: { (this: DirectedGraph<V>, ): Set<V>[] }
     getOrder:                       { (this: DirectedGraph<V>, source: V): [V[], [V, V][]] }
@@ -117,8 +117,9 @@ directedGraphProto.addEdge = function addEdge<V>(this: DirectedGraph<V>, v: V, w
  * @param v
  * @param w
  */
-directedGraphProto.removeEdge = function removeEdge<V>(this: DirectedGraph<V>, v: V, w: V): boolean {
-    return this._fromDict.get(v)!.delete(w) || this._toDict.get(w)!.delete(v)
+directedGraphProto.removeEdge = function removeEdge<V>(this: DirectedGraph<V>, v: V, w: V): void {
+    this._fromDict.get(v)!.delete(w)
+    this._toDict.get(w)!.delete(v)
 }
 
 /**
@@ -168,7 +169,6 @@ directedGraphProto.getStronglyConnectedComponents = function getStronglyConnecte
 
     // Helper function to perform depth first search
     const helper = (v: V): void => {
-        console.log("Current stack:", stack)
         stack.push(v)
         vertexDict.set(v, [index, index, true, NaN])  // Hold index, lowlink, onstack status, and component index
         index += 1
@@ -215,7 +215,7 @@ directedGraphProto.getStronglyConnectedComponents = function getStronglyConnecte
 
     // Ensure that every vertex is put into a component
     while (unvisited.size !== 0) {
-        const v = unvisited.values().next().value!
+        const v = Array.from(unvisited)[unvisited.size-1]
         unvisited.delete(v)
         helper(v)
     }
@@ -260,8 +260,6 @@ directedGraphProto.getOrder = function getOrder<V>(this: DirectedGraph<V>, sourc
                 cutEdges.push([v, v])
             }
         } else {
-            console.log("Current component is", component)
-
             // Create directed graph from a component
             const g = DirectedGraph<V>()
 
@@ -338,9 +336,7 @@ directedGraphProto.getLayers = function getLayers<V>(this: DirectedGraph<V>, sou
             predecessors.add(source)
         }
         for (const v of predecessors) {
-            if (rank.get(v)! > maxRank) {
-                maxRank = rank.get(v)!
-            }
+            maxRank = Math.max(maxRank, rank.get(v)!)
         }
 
         // Set the rank of the current node to one more than the maximum rank
