@@ -1,7 +1,7 @@
 import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "utils/serialize";
 import DirectedGraph from "utils/graph";
 
-const g = DirectedGraph<string>();
+const g = new DirectedGraph<string>();
 g.addVertex("A");
 g.addVertex("B");
 g.addVertex("C");
@@ -56,33 +56,23 @@ class StringWrapper implements JSONSerializable {
     }
 }
 
-// function StringWrapper(this: StringWrapper, s: string) {
-//     this.myString = s
-// }
-// StringWrapper.prototype.say = function say(this) {
-//     console.log(`Hello, I am ${this.myString}`)
-// }
-// StringWrapper.prototype.toJSON = function toJSON(this) {
-//     return `__StringWrapper:${this.myString}`
-// }
+let sw = new StringWrapper("A");
 
-let sw = new StringWrapper("A")
-
-const h = DirectedGraph<StringWrapper>()
-h.addVertex(sw)
-h.addEdge(sw, sw)
+const h = new DirectedGraph<StringWrapper>();
+h.addVertex(sw);
+h.addEdge(sw, sw);
 
 declare global {
-    var DirectedGraph: {<V extends JSONValue>(this: void): DirectedGraph<V>}
-    var g: DirectedGraph<string>
-    var tsJSON: tsJSON
-    var StringWrapper: any
-    var sw: StringWrapper
-    var h: DirectedGraph<StringWrapper>
+    var DirectedGraph: any;
+    var g: DirectedGraph<string>;
+    var tsJSON: tsJSON;
+    var StringWrapper: any;
+    var sw: StringWrapper;
+    var h: DirectedGraph<StringWrapper>;
 }
-globalThis.DirectedGraph = DirectedGraph
-globalThis.g = g
-globalThis.tsJSON = tsJSON
-globalThis.StringWrapper = StringWrapper
-globalThis.sw = sw
-globalThis.h = h
+globalThis.DirectedGraph = DirectedGraph;
+globalThis.g = g;
+globalThis.tsJSON = tsJSON;
+globalThis.StringWrapper = StringWrapper;
+globalThis.sw = sw;
+globalThis.h = h;

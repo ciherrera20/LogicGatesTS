@@ -1,6 +1,6 @@
-import { tsJSON } from "utils/serialize";
+import tsJSON from "utils/serialize";
 import DirectedGraph from "utils/graph";
-const g = DirectedGraph();
+const g = new DirectedGraph();
 g.addVertex("A");
 g.addVertex("B");
 g.addVertex("C");
@@ -36,23 +36,23 @@ class StringWrapper {
         return `StringWrapper(${this.myString})`;
     }
     toJSON() {
-        return `__StringWrapper:${this.myString}`;
+        return { "/StringWrapper": this.myString };
+    }
+    static JSONSyntaxError(msg) {
+        new SyntaxError(`StringWrapper reviver: ${msg}`);
     }
     static getReviver() {
-        function reviver(key, value) {
-            console.log("This:");
-            console.log(this);
-            console.log("Key:");
-            console.log(key);
-            console.log("Value:");
-            console.log(value);
-            if (typeof value === "string" && value.substring(0, 16) === "__StringWrapper:") {
-                return new StringWrapper(value.substring(16));
+        const reviver = function (key, value) {
+            if (tsJSON.isJSONObj(value) && value["/StringWrapper"] !== undefined) {
+                const stringWrapperObj = value["/StringWrapper"];
+                if (typeof stringWrapperObj !== "string")
+                    throw new SyntaxError("expected a string as top level object");
+                return new StringWrapper(stringWrapperObj);
             }
             else {
                 return value;
             }
-        }
+        };
         return reviver;
     }
 }
@@ -66,7 +66,7 @@ class StringWrapper {
 //     return `__StringWrapper:${this.myString}`
 // }
 let sw = new StringWrapper("A");
-const h = DirectedGraph();
+const h = new DirectedGraph();
 h.addVertex(sw);
 h.addEdge(sw, sw);
 globalThis.DirectedGraph = DirectedGraph;
