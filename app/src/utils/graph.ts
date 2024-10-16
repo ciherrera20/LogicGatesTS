@@ -1,39 +1,39 @@
-export default DirectedGraph
+import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "utils/serialize";
+export default DirectedGraph;
 
 /**
  * Directed graph implementation using adjacency lists
  */
-interface DirectedGraph<V> {
-    _fromDict:                      Map<V, Set<V>>
-    _toDict:                        Map<V, Set<V>>
-    addVertex:                      { (this: DirectedGraph<V>, v: V): void }
-    removeVertex:                   { (this: DirectedGraph<V>, v: V): void }
-    checkEdge:                      { (this: DirectedGraph<V>, v: V, w: V): boolean }
-    addEdge:                        { (this: DirectedGraph<V>, v: V, w: V): void }
-    removeEdge:                     { (this: DirectedGraph<V>, v: V, w: V): void }
-    getShortestPaths:               { (this: DirectedGraph<V>, source: V): Map<V, number> }
-    getStronglyConnectedComponents: { (this: DirectedGraph<V>, ): Set<V>[] }
-    getOrder:                       { (this: DirectedGraph<V>, source: V): [V[], [V, V][]] }
-    removeCycles:                   { (this: DirectedGraph<V>, source: V): [DirectedGraph<V>, V[]] }
-    getLayers:                      { (this: DirectedGraph<V>, source: V): Map<V, number> }
-    getDirectSuccessors:            { (this: DirectedGraph<V>, v: V): Set<V> }
-    getDirectPredecessors:          { (this: DirectedGraph<V>, v: V): Set<V> }
-    getAllSuccessors:               { (this: DirectedGraph<V>, v: V): Set<V> }
-    getAllPredecessors:             { (this: DirectedGraph<V>, v: V): Set<V> }
-    copy:                           { (this: DirectedGraph<V>): DirectedGraph<V> }
-    // serialize:                      { (this: DirectedGraph<V>): any }
-    toString:                       { (this: DirectedGraph<V>): string }
-}
+interface DirectedGraph<V extends JSONValue> extends JSONSerializable {
+    _fromDict:                      Map<V, Set<V>>;
+    _toDict:                        Map<V, Set<V>>;
+    addVertex:                      (this: DirectedGraph<V>, v: V) => void;
+    removeVertex:                   (this: DirectedGraph<V>, v: V) => void;
+    checkEdge:                      (this: DirectedGraph<V>, v: V, w: V) => boolean;
+    addEdge:                        (this: DirectedGraph<V>, v: V, w: V) => void;
+    removeEdge:                     (this: DirectedGraph<V>, v: V, w: V) => void;
+    getShortestPaths:               (this: DirectedGraph<V>, source: V) => Map<V, number>;
+    getStronglyConnectedComponents: (this: DirectedGraph<V>, ) => Set<V>[];
+    getOrder:                       (this: DirectedGraph<V>, source: V) => [V[], [V, V][]];
+    removeCycles:                   (this: DirectedGraph<V>, source: V) => [DirectedGraph<V>, V[]];
+    getLayers:                      (this: DirectedGraph<V>, source: V) => Map<V, number>;
+    getDirectSuccessors:            (this: DirectedGraph<V>, v: V) => Set<V>;
+    getDirectPredecessors:          (this: DirectedGraph<V>, v: V) => Set<V>;
+    getAllSuccessors:               (this: DirectedGraph<V>, v: V) => Set<V>;
+    getAllPredecessors:             (this: DirectedGraph<V>, v: V) => Set<V>;
+    copy:                           (this: DirectedGraph<V>) => DirectedGraph<V>;
+    toString:                       (this: DirectedGraph<V>) => string;
+    toJSON:                         (this: DirectedGraph<V>) => Exclude<JSONValue, JSONSerializable>;
+};
 
 const directedGraphProto = Object.create(null);
 
-function DirectedGraph<V>(this: void): DirectedGraph<V> {
-    let graph: DirectedGraph<V> = Object.create(directedGraphProto)
-    graph._fromDict = new Map<V, Set<V>>()  // v -> w for all w in W
-    graph._toDict = new Map<V, Set<V>>()    // w -> v for all w in W
-
-    return graph
-}
+function DirectedGraph<V extends JSONValue>(this: void): DirectedGraph<V> {
+    let graph: DirectedGraph<V> = Object.create(directedGraphProto);
+    graph._fromDict = new Map<V, Set<V>>();  // v -> w for all w in W
+    graph._toDict = new Map<V, Set<V>>();    // w -> v for all w in W
+    return graph;
+};
 
 /**
  * Add vertex v to the graph if it is not already in it
@@ -42,12 +42,12 @@ function DirectedGraph<V>(this: void): DirectedGraph<V> {
  * 
  * @param v
  */
-directedGraphProto.addVertex = function addVertex<V>(this: DirectedGraph<V>, v: V): void {
+directedGraphProto.addVertex = function addVertex<V extends JSONValue>(this: DirectedGraph<V>, v: V): void {
     if (!this._fromDict.has(v) && !this._toDict.has(v)) {
-        this._fromDict.set(v, new Set())
-        this._toDict.set(v, new Set())
+        this._fromDict.set(v, new Set());
+        this._toDict.set(v, new Set());
     }
-}
+};
 
 /**
  * Remove vertex v from the graph
@@ -59,16 +59,16 @@ directedGraphProto.addVertex = function addVertex<V>(this: DirectedGraph<V>, v: 
  * 
  * @param v 
  */
-directedGraphProto.removeVertex = function removeVertex<V>(this: DirectedGraph<V>, v: V): void {
+directedGraphProto.removeVertex = function removeVertex<V extends JSONValue>(this: DirectedGraph<V>, v: V): void {
     for (const w of this._fromDict.get(v)!) {
-        this._toDict.get(w)!.delete(v)
+        this._toDict.get(w)!.delete(v);
     }
     for (const w of this._toDict.get(v)!) {
-        this._fromDict.get(w)!.delete(v)
+        this._fromDict.get(w)!.delete(v);
     }
-    this._fromDict.delete(v)
-    this._toDict.delete(v)
-}
+    this._fromDict.delete(v);
+    this._toDict.delete(v);
+};
 
 /**
  * If the edge from v to w exists, check if it is part of a cycle
@@ -79,21 +79,21 @@ directedGraphProto.removeVertex = function removeVertex<V>(this: DirectedGraph<V
  * @param v
  * @param w
  */
-directedGraphProto.checkEdge = function checkEdge<V>(this: DirectedGraph<V>, v: V, w: V): boolean {
-    const stack: V[] = [w]
-    const visited = new Set<V>()
+directedGraphProto.checkEdge = function checkEdge<V extends JSONValue>(this: DirectedGraph<V>, v: V, w: V): boolean {
+    const stack: V[] = [w];
+    const visited = new Set<V>();
     while (stack.length !== 0) {
-        const x = stack.pop() as V
+        const x = stack.pop() as V;
         if (x === v) {
-            return true
+            return true;
         } else if (!visited.has(x)) {
             for (const succ of this.getDirectSuccessors(x)) {
-                stack.push(succ)
+                stack.push(succ);
             }
         }
     }
-    return false
-}
+    return false;
+};
 
 /**
  * Add an edge going from v to w
@@ -103,10 +103,10 @@ directedGraphProto.checkEdge = function checkEdge<V>(this: DirectedGraph<V>, v: 
  * @param v
  * @param w
  */
-directedGraphProto.addEdge = function addEdge<V>(this: DirectedGraph<V>, v: V, w: V): void {
-    this._fromDict.get(v)!.add(w)
-    this._toDict.get(w)!.add(v)
-}
+directedGraphProto.addEdge = function addEdge<V extends JSONValue>(this: DirectedGraph<V>, v: V, w: V): void {
+    this._fromDict.get(v)!.add(w);
+    this._toDict.get(w)!.add(v);
+};
 
 /**
  * If an edge exists from v to w, remove it
@@ -117,10 +117,10 @@ directedGraphProto.addEdge = function addEdge<V>(this: DirectedGraph<V>, v: V, w
  * @param v
  * @param w
  */
-directedGraphProto.removeEdge = function removeEdge<V>(this: DirectedGraph<V>, v: V, w: V): void {
-    this._fromDict.get(v)!.delete(w)
-    this._toDict.get(w)!.delete(v)
-}
+directedGraphProto.removeEdge = function removeEdge<V extends JSONValue>(this: DirectedGraph<V>, v: V, w: V): void {
+    this._fromDict.get(v)!.delete(w);
+    this._toDict.get(w)!.delete(v);
+};
 
 /**
  * Get the lengths of the shortest path from the given
@@ -130,27 +130,27 @@ directedGraphProto.removeEdge = function removeEdge<V>(this: DirectedGraph<V>, v
  * 
  * @param source
  */
-directedGraphProto.getShortestPaths = function getShortestPaths<V>(this: DirectedGraph<V>, source: V): Map<V, number> {
+directedGraphProto.getShortestPaths = function getShortestPaths<V extends JSONValue>(this: DirectedGraph<V>, source: V): Map<V, number> {
     // Breadth first traversal from source
-    const lengths = new Map<V, number>([[source, 0]])
-    const queue: V[] = [source]
+    const lengths = new Map<V, number>([[source, 0]]);
+    const queue: V[] = [source];
     while (queue.length !== 0) {
-        const v = queue.pop() as V
+        const v = queue.pop() as V;
         for (const w of this._fromDict.get(v)!) {
             if (!lengths.has(w)) {
-                lengths.set(w, lengths.get(v)! + 1)
-                queue.unshift(w)
+                lengths.set(w, lengths.get(v)! + 1);
+                queue.unshift(w);
             }
         }
     }
     // Set unreachable vertices to infinity
     for (const v of this._fromDict.keys()!) {
         if (!lengths.has(v)) {
-            lengths.set(v, Infinity)
+            lengths.set(v, Infinity);
         }
     }
-    return lengths
-}
+    return lengths;
+};
 
 /**
  * Implements Tarjan's strongly connected components algorithm:
@@ -159,36 +159,36 @@ directedGraphProto.getShortestPaths = function getShortestPaths<V>(this: Directe
  * 
  * Runtime: O(|V|+|E|)
  */
-directedGraphProto.getStronglyConnectedComponents = function getStronglyConnectedComponents<V>(this: DirectedGraph<V>): Set<V>[] {
-    const unvisited = new Set<V>(this._fromDict.keys())
-    const stack: V[] = []
-    const vertexDict = new Map<V, [number, number, boolean, number]>()
-    let index = 0
-    const scComponents: Set<V>[] = []
+directedGraphProto.getStronglyConnectedComponents = function getStronglyConnectedComponents<V extends JSONValue>(this: DirectedGraph<V>): Set<V>[] {
+    const unvisited = new Set<V>(this._fromDict.keys());
+    const stack: V[] = [];
+    const vertexDict = new Map<V, [number, number, boolean, number]>();
+    let index = 0;
+    const scComponents: Set<V>[] = [];
     // const dagEdges: [V, V][] = []
 
     // Helper function to perform depth first search
     const helper = (v: V): void => {
-        stack.push(v)
-        vertexDict.set(v, [index, index, true, NaN])  // Hold index, lowlink, onstack status, and component index
-        index += 1
+        stack.push(v);
+        vertexDict.set(v, [index, index, true, NaN]);  // Hold index, lowlink, onstack status, and component index
+        index += 1;
 
         // Visit every vertex that v has an edge going to
         for (const w of this._fromDict.get(v)!) {
-            let wasUnvisited = false
+            let wasUnvisited = false;
             if (unvisited.has(w)) {
-                unvisited.delete(w)
-                helper(w)
-                wasUnvisited = true
+                unvisited.delete(w);
+                helper(w);
+                wasUnvisited = true;
             }
 
             // Update lowlink value depending on whether w as already visited and on the stack
-            const [vIndex, vLowlink,,] = vertexDict.get(v)!
-            const [wIndex, wLowlink, wOnstack,] = vertexDict.get(w)!
+            const [vIndex, vLowlink,,] = vertexDict.get(v)!;
+            const [wIndex, wLowlink, wOnstack,] = vertexDict.get(w)!;
             if (wasUnvisited) {
-                vertexDict.set(v, [vIndex, Math.min(vLowlink, wLowlink), true, NaN])
+                vertexDict.set(v, [vIndex, Math.min(vLowlink, wLowlink), true, NaN]);
             } else if (wOnstack) {
-                vertexDict.set(v, [vIndex, Math.min(vLowlink, wIndex), true, NaN])
+                vertexDict.set(v, [vIndex, Math.min(vLowlink, wIndex), true, NaN]);
             }
             // } else {
             //     dagEdges.push([v, w])
@@ -196,28 +196,28 @@ directedGraphProto.getStronglyConnectedComponents = function getStronglyConnecte
         }
 
         // Pop vertices into a component
-        const [vIndex, vLowlink,,] = vertexDict.get(v)!
+        const [vIndex, vLowlink,,] = vertexDict.get(v)!;
         if (vIndex === vLowlink) {
-            const compIndex = scComponents.length
-            const component = new Set<V>()
+            const compIndex = scComponents.length;
+            const component = new Set<V>();
 
             // Pop from the stack until the popped vertex is the current vertex
-            let w: V
+            let w: V;
             do {
-                w = stack.pop() as V
-                const [wIndex, wLowlink,,] = vertexDict.get(w)!
-                vertexDict.set(w, [wIndex, wLowlink, false, compIndex])
-                component.add(w)
+                w = stack.pop() as V;
+                const [wIndex, wLowlink,,] = vertexDict.get(w)!;
+                vertexDict.set(w, [wIndex, wLowlink, false, compIndex]);
+                component.add(w);
             } while (w !== v)
-            scComponents.unshift(component)
+            scComponents.unshift(component);
         }
-    }
+    };
 
     // Ensure that every vertex is put into a component
     while (unvisited.size !== 0) {
-        const v = Array.from(unvisited)[unvisited.size-1]
-        unvisited.delete(v)
-        helper(v)
+        const v = Array.from(unvisited)[unvisited.size-1];
+        unvisited.delete(v);
+        helper(v);
     }
 
     // // Turn the graph into a DAG
@@ -231,8 +231,8 @@ directedGraphProto.getStronglyConnectedComponents = function getStronglyConnecte
     //     dag.addEdge(scComponents[vCompIndex], scComponents[wCompIndex])
     // }
 
-    return scComponents
-}
+    return scComponents;
+};
 
 /**
  * Get an order for the graph that respects dependencies given a source
@@ -248,28 +248,28 @@ directedGraphProto.getStronglyConnectedComponents = function getStronglyConnecte
  * 
  * @param source
  */
-directedGraphProto.getOrder = function getOrder<V>(this: DirectedGraph<V>, source: V): [V[], [V, V][]] {
-    const order: V[] = []
-    const cutEdges: [V, V][] = []
-    const shortestPaths = this.getShortestPaths(source)
+directedGraphProto.getOrder = function getOrder<V extends JSONValue>(this: DirectedGraph<V>, source: V): [V[], [V, V][]] {
+    const order: V[] = [];
+    const cutEdges: [V, V][] = [];
+    const shortestPaths = this.getShortestPaths(source);
     for (const component of this.getStronglyConnectedComponents()) {
         if (component.size === 1) {
-            const v = component.values().next().value as V
-            order.push(v)
+            const v = component.values().next().value as V;
+            order.push(v);
             if (this._toDict.get(v)!.has(v)) {
-                cutEdges.push([v, v])
+                cutEdges.push([v, v]);
             }
         } else {
             // Create directed graph from a component
-            const g = DirectedGraph<V>()
+            const g = DirectedGraph<V>();
 
             // Add vertices and find closest one
-            let closest = component.values().next().value as V  // The component's closest vertex to the source
+            let closest = component.values().next().value as V;  // The component's closest vertex to the source
             for (const v of component) {
                 if (shortestPaths.get(v)! < shortestPaths.get(closest)!) {
-                    closest = v
+                    closest = v;
                 }
-                g.addVertex(v)
+                g.addVertex(v);
             }
 
             // Add edges and keep track of cut edges (i.e. edges leaving the component)
@@ -277,9 +277,9 @@ directedGraphProto.getOrder = function getOrder<V>(this: DirectedGraph<V>, sourc
                 for (const v of this._toDict.get(w)!) {
                     if (component.has(v)) {
                         if (w !== closest) {
-                            g.addEdge(v, w)
+                            g.addEdge(v, w);
                         } else {
-                            cutEdges.push([v, w])
+                            cutEdges.push([v, w]);
                         }
                     }
                 }
@@ -288,188 +288,229 @@ directedGraphProto.getOrder = function getOrder<V>(this: DirectedGraph<V>, sourc
             // Get order of component and append it to the total order
             const [recOrder, recCutEdges] = g.getOrder(closest)
             for (const v of recOrder) {
-                order.push(v)
+                order.push(v);
             }
             for (const edge of recCutEdges) {
-                cutEdges.push(edge)
+                cutEdges.push(edge);
             }
         }
     }
-    return [order, cutEdges]
-}
+    return [order, cutEdges];
+};
 
 /**
  * Use the cut_edges returned by get_order to remove cycles
  * 
  * @param source
  */
-directedGraphProto.removeCycles = function removeCycles<V>(this: DirectedGraph<V>, source: V): [DirectedGraph<V>, V[]] {
-    const [order, cutEdges] = this.getOrder(source)
-    const acyclic = this.copy()
+directedGraphProto.removeCycles = function removeCycles<V extends JSONValue>(this: DirectedGraph<V>, source: V): [DirectedGraph<V>, V[]] {
+    const [order, cutEdges] = this.getOrder(source);
+    const acyclic = this.copy();
     for (const [v, w] of cutEdges) {
-        acyclic.removeEdge(v, w)
+        acyclic.removeEdge(v, w);
     }
-    return [acyclic, order]
-}
+    return [acyclic, order];
+};
 
 /**
  * Put the vertices into layers
  * 
  * @param source
  */
-directedGraphProto.getLayers = function getLayers<V>(this: DirectedGraph<V>, source: V): Map<V, number> {
-    const [acyclic, order] = this.removeCycles(source)
+directedGraphProto.getLayers = function getLayers<V extends JSONValue>(this: DirectedGraph<V>, source: V): Map<V, number> {
+    const [acyclic, order] = this.removeCycles(source);
 
-    const rank = new Map<V, number>()  // Rank values for each vertex
+    const rank = new Map<V, number>();  // Rank values for each vertex
     for (const v of acyclic._fromDict.keys()) {  // Initialize all ranks to 0
-        rank.set(v, 0)
+        rank.set(v, 0);
     }
 
     // Iterate over the vertices in topological order
     for (const [i, w] of order.entries()) {
         // Find the maximum rank of the predecessors of the current node
-        let maxRank = -1
+        let maxRank = -1;
 
         // Keep the source always below every other node, even if they are at the same layer
-        const predecessors = acyclic.getDirectPredecessors(w)
+        const predecessors = acyclic.getDirectPredecessors(w);
         if (i === 1) {
-            predecessors.add(source)
+            predecessors.add(source);
         }
         for (const v of predecessors) {
-            maxRank = Math.max(maxRank, rank.get(v)!)
+            maxRank = Math.max(maxRank, rank.get(v)!);
         }
 
         // Set the rank of the current node to one more than the maximum rank
-        rank.set(w, maxRank + 1)
+        rank.set(w, maxRank + 1);
     }
 
-    return rank
-}
+    return rank;
+};
 
 /**
  * Get the direct successors of v
  * 
  * @param v
  */
-directedGraphProto.getDirectSuccessors = function getDirectSuccessors<V>(this: DirectedGraph<V>, v: V): Set<V> {
-    return this._fromDict.get(v)!
-}
+directedGraphProto.getDirectSuccessors = function getDirectSuccessors<V extends JSONValue>(this: DirectedGraph<V>, v: V): Set<V> {
+    return this._fromDict.get(v)!;
+};
 
 /**
  * Get the direct predecessors of v
  * 
  * @param v
  */
-directedGraphProto.getDirectPredecessors = function getDirectPredecessors<V>(this: DirectedGraph<V>, v: V): Set<V> {
-    return this._toDict.get(v)!
-}
+directedGraphProto.getDirectPredecessors = function getDirectPredecessors<V extends JSONValue>(this: DirectedGraph<V>, v: V): Set<V> {
+    return this._toDict.get(v)!;
+};
 
 /**
  * Get all successors of v
  * 
  * @param v
  */
-directedGraphProto.getAllSuccessors = function getAllSuccessors<V>(this: DirectedGraph<V>, v: V): Set<V> {
-    const oldV = v
+directedGraphProto.getAllSuccessors = function getAllSuccessors<V extends JSONValue>(this: DirectedGraph<V>, v: V): Set<V> {
+    const oldV = v;
 
     // Depth first traversal from v
-    const successors = new Set<V>([v])
-    const stack: V[] = [v]
+    const successors = new Set<V>([v]);
+    const stack: V[] = [v];
     while (stack.length !== 0) {
-        const v = stack.pop() as V
+        const v = stack.pop() as V;
         for (const w of this._fromDict.get(v)!) {
             if (!successors.has(w)) {
-                successors.add(w)
-                stack.push(w)
+                successors.add(w);
+                stack.push(w);
             }
         }
     }
 
-    successors.delete(oldV)
-    return successors
-}
+    successors.delete(oldV);
+    return successors;
+};
 
 /**
  * Get all predecessors of v
  * 
  * @param v
  */
-directedGraphProto.getAllPredecessors = function getAllPredecessors<V>(this: DirectedGraph<V>, v: V): Set<V> {
-    const oldV = v
+directedGraphProto.getAllPredecessors = function getAllPredecessors<V extends JSONValue>(this: DirectedGraph<V>, v: V): Set<V> {
+    const oldV = v;
 
     // Depth first traversal from v
-    const predecessors = new Set<V>([v])
-    const stack: V[] = [v]
+    const predecessors = new Set<V>([v]);
+    const stack: V[] = [v];
     while (stack.length !== 0) {
-        const v = stack.pop() as V
+        const v = stack.pop() as V;
         for (const w of this._toDict.get(v)!) {
             if (!predecessors.has(w)) {
-                predecessors.add(w)
-                stack.push(w)
+                predecessors.add(w);
+                stack.push(w);
             }
         }
     }
 
-    predecessors.delete(oldV)
-    return predecessors
-}
-
-// /**
-//  * Turn into a serializable object
-//  */
-// directedGraphProto.serialize = function serialize<V>(this: DirectedGraph<V>): any {
-//     const obj: any = {}
-//     for (const [v, W] of this._fromDict) {
-//         obj[v] = []
-//         for (const w of W) {
-//             obj[v].push(w)
-//         }
-//     }
-//     return obj
-// }
+    predecessors.delete(oldV);
+    return predecessors;
+};
 
 /**
- * Copy the graph
+ * Create a shallow copy of the graph
  */
-directedGraphProto.copy = function copy<V>(this: DirectedGraph<V>): any {
-    const copy = DirectedGraph<V>()
+directedGraphProto.copy = function copy<V extends JSONValue>(this: DirectedGraph<V>): any {
+    const copy = DirectedGraph<V>();
     for (const v of this._fromDict.keys()) {
-        copy.addVertex(v)
+        copy.addVertex(v);
     }
     for (const [v, W] of this._fromDict) {
         for (const w of W) {
-            copy.addEdge(v, w)
+            copy.addEdge(v, w);
         }
     }
-    return copy
-}
+    return copy;
+};
 
 /**
  * Print a simplified representation of the directed graph
  */
-directedGraphProto.toString = function toString<V>(this: DirectedGraph<V>): string {
-    let s = "{"
+directedGraphProto.toString = function toString<V extends JSONValue>(this: DirectedGraph<V>): string {
+    const removeNewlines = (s: string) => s.replace(/(\r\n|\n|\r)/gm, "");
+    let s = "{";
     if (this._fromDict.size !== 0) {
         for (const v of this._fromDict.keys()) {
-            s += `${v}: {`
+            s += `${removeNewlines(String(v))}: {`;
             if (this._fromDict.get(v)!.size !== 0) {
                 for (const w of this._fromDict.get(v)!) {
-                    s += `${w}, `
+                    s += `${removeNewlines(String(w))}, `;
                 }
-                s = s.substring(0, s.length - 2)
+                s = s.substring(0, s.length - 2);
             }
-            s += "},\n "
+            s += "},\n ";
         }
-        s = s.substring(0, s.length - 3)
+        s = s.substring(0, s.length - 3);
     }
-    s += "}"
-    return s
-}
+    s += "}";
+    return s;
+};
 
-// DirectedGraph.deserialize = function deserialize<V>(this: void, obj: any): DirectedGraph<V> {
-//     const graph = DirectedGraph<V>()
-//     for (const v in obj) {
+directedGraphProto.toJSON = function toJSON<V extends JSONValue>(this: DirectedGraph<V>): Exclude<JSONValue, JSONSerializable> {
+    const vertexSerializedList: JSONValue[] = [];
+    const edgeDict: {[id: number]: number[]} = {};
+    const obj: {"/DirectedGraph": [JSONValue[], {[id: number]: number[]}]} = {"/DirectedGraph": [vertexSerializedList, edgeDict]};
+    const vertexMap = new Map<V, number>();
+    for (const v of this._fromDict.keys()) {
+        const vSerial: JSONValue = tsJSON.isJSONSerializable(v) ? v.toJSON() : v;
+        vertexMap.set(v, vertexSerializedList.length);
+        vertexSerializedList.push(vSerial);
+    }
+    for (const [v, W] of this._fromDict) {
+        const vIdx = vertexMap.get(v)!;
+        for (const w of W) {
+            const wIdx = vertexMap.get(w)!;
+            if (edgeDict[vIdx] === undefined) {
+                edgeDict[vIdx] = [];
+            }
+            edgeDict[vIdx].push(wIdx);
+        }
+    }
+    return obj;
+};
 
-//     }
-//     return graph
-// }
+DirectedGraph.JSONSyntaxError = (msg: string) => new SyntaxError(`DirectedGraph reviver: ${msg}`);
+
+DirectedGraph.getReviver = function getReviver<V extends JSONValue>(this: void, vReviver: JSONReviver<V>): JSONReviver<DirectedGraph<V>> {
+    const reviver: JSONReviver<DirectedGraph<V>> = function(this, key, value) {
+        if (tsJSON.isJSONObj(value) && value["/DirectedGraph"] !== undefined) {
+            const graphObj = value["/DirectedGraph"];
+            if (!tsJSON.isJSONArray(graphObj)) throw DirectedGraph.JSONSyntaxError("expected an array as top level object");
+            if (!tsJSON.isJSONArray(graphObj[0])) throw DirectedGraph.JSONSyntaxError("expected an array at index 0 as vertex list");
+            if (!tsJSON.isJSONObj(graphObj[1])) throw DirectedGraph.JSONSyntaxError("expected an object at index 1 as edges dict");
+            const vertexSerializedList = graphObj[0];  // Serialized vertices
+            const edgeDict = graphObj[1];  // Dictionary of edges
+            const vertexList: V[] = [];  // Deserialized vertices
+            const graph = DirectedGraph<V>();  // The graph to create
+
+            // Add all vertices
+            for (const [i, vSerial] of vertexSerializedList.entries()) {
+                const v: V = vReviver.bind(value)(String(i), vSerial) as V;
+                graph.addVertex(v);
+                vertexList.push(v);
+            }
+
+            // Add all edges
+            for (const i in edgeDict) {
+                if (!Number.isInteger(Number(i))) throw DirectedGraph.JSONSyntaxError("expected an integer as a key in edge dict");
+                const J = edgeDict[i];
+                if (!tsJSON.isJSONArray(J)) throw DirectedGraph.JSONSyntaxError("expected an array as a value in edge dict");
+                for (const j of J) {
+                    if (!Number.isInteger(Number(j))) throw DirectedGraph.JSONSyntaxError("expected an integer as an element in values of edge dict");
+                    graph.addEdge(vertexList[Number(i)], vertexList[Number(j)]);
+                }
+            }
+            return graph;
+        } else {
+            return value;
+        }
+    };
+    return reviver;
+};
