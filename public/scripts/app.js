@@ -1,5 +1,11 @@
-import tsJSON from "utils/serialize";
-import DirectedGraph from "utils/graph";
+import tsJSON from "gates/utils/serialize";
+import DirectedGraph from "gates/utils/graph";
+import Constant from "gates/builtins/constant";
+import Datetime from "gates/builtins/datetime";
+import Nand from "gates/builtins/nand";
+import Reshaper from "gates/builtins/reshaper";
+import Sink from "gates/builtins/sink";
+import Source from "gates/builtins/source";
 const g = new DirectedGraph();
 g.addVertex("A");
 g.addVertex("B");
@@ -56,15 +62,6 @@ class StringWrapper {
         return reviver;
     }
 }
-// function StringWrapper(this: StringWrapper, s: string) {
-//     this.myString = s
-// }
-// StringWrapper.prototype.say = function say(this) {
-//     console.log(`Hello, I am ${this.myString}`)
-// }
-// StringWrapper.prototype.toJSON = function toJSON(this) {
-//     return `__StringWrapper:${this.myString}`
-// }
 let sw = new StringWrapper("A");
 const h = new DirectedGraph();
 h.addVertex(sw);
@@ -75,3 +72,9 @@ globalThis.tsJSON = tsJSON;
 globalThis.StringWrapper = StringWrapper;
 globalThis.sw = sw;
 globalThis.h = h;
+globalThis.Constant = Constant;
+globalThis.Datetime = Datetime;
+globalThis.Nand = Nand;
+globalThis.Reshaper = Reshaper;
+globalThis.Sink = Sink;
+globalThis.Source = Source;

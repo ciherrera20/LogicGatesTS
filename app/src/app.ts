@@ -1,5 +1,11 @@
-import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "utils/serialize";
-import DirectedGraph from "utils/graph";
+import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/serialize";
+import DirectedGraph from "gates/utils/graph";
+import Constant from "gates/builtins/constant";
+import Datetime from "gates/builtins/datetime";
+import Nand from "gates/builtins/nand";
+import Reshaper from "gates/builtins/reshaper";
+import Sink from "gates/builtins/sink";
+import Source from "gates/builtins/source";
 
 const g = new DirectedGraph<string>();
 g.addVertex("A");
@@ -69,6 +75,12 @@ declare global {
     var StringWrapper: any;
     var sw: StringWrapper;
     var h: DirectedGraph<StringWrapper>;
+    var Constant: any;
+    var Datetime: any;
+    var Nand: any;
+    var Reshaper: any;
+    var Sink: any;
+    var Source: any;
 }
 globalThis.DirectedGraph = DirectedGraph;
 globalThis.g = g;
@@ -76,3 +88,9 @@ globalThis.tsJSON = tsJSON;
 globalThis.StringWrapper = StringWrapper;
 globalThis.sw = sw;
 globalThis.h = h;
+globalThis.Constant = Constant;
+globalThis.Datetime = Datetime;
+globalThis.Nand = Nand;
+globalThis.Reshaper = Reshaper;
+globalThis.Sink = Sink;
+globalThis.Source = Source;

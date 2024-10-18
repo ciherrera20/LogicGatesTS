@@ -1,4 +1,4 @@
-import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "utils/serialize";
+import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/serialize";
 
 /**
  * Directed graph implementation using adjacency lists
@@ -21,7 +21,7 @@ import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "utils/serializ
 //     getAllSuccessors:               (this: DirectedGraph<V>, v: V) => Set<V>;
 //     getAllPredecessors:             (this: DirectedGraph<V>, v: V) => Set<V>;
 //     copy:                           (this: DirectedGraph<V>) => DirectedGraph<V>;
-//     toString:                       (this: DirectedGraph<V>) => string;
+//     toString:                       (thisk: DirectedGraph<V>) => string;
 //     toJSON:                         (this: DirectedGraph<V>) => Exclude<JSONValue, JSONSerializable>;
 // };
 
@@ -475,7 +475,7 @@ class DirectedGraph<V extends JSONValue> implements JSONSerializable {
         return obj;
     };
 
-    static JSONSyntaxError(msg: string) {
+    static JSONSyntaxError(msg: string): SyntaxError {
         return new SyntaxError(`DirectedGraph reviver: ${msg}`);
     }
 

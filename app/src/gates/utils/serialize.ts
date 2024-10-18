@@ -88,12 +88,9 @@ interface tsJSON {
     isJSONSerializable(
         value: JSONValue
     ): value is JSONSerializable;
-    toJSONValue<T>(
+    makeJSONCompatible<T>(
         value: JSONCompatible<T>
     ): JSONValue;
-    toJSONKey(
-        key: JSONValue
-    ): JSONKey;
     readonly [Symbol.toStringTag]: string
 };
 
@@ -118,8 +115,7 @@ const tsJSON: tsJSON = {
     isJSONArray: (value): value is JSONArray => value instanceof Array,
     isJSONObj: (value): value is JSONObj => value instanceof Object && !((value as JSONSerializable).toJSON instanceof Function),
     isJSONSerializable: (value): value is JSONSerializable => (value as JSONSerializable).toJSON instanceof Function,
-    toJSONValue: <T>(value: JSONCompatible<T>) => value,
-    toJSONKey: (key) => typeof key === "string" ? key : tsJSON.stringify(key),
+    makeJSONCompatible: <T>(value: JSONCompatible<T>) => value,
     [Symbol.toStringTag]: "tsJSON"
 };
 
