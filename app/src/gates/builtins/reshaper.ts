@@ -4,7 +4,7 @@ import Gate, { GateDim, GateDatum, GateData, isGateDim } from "gates/gate"
 class Reshaper extends Gate {
     _size: number
 
-    constructor(inputDims: GateDim[], outputDims: GateDim[]) {
+    constructor(name: "Reshaper", inputDims: GateDim[], outputDims: GateDim[]) {
         const sum = (v: number, acc: number) => v + acc;
         const size = inputDims.reduce(sum, 0);
         if (size !== outputDims.reduce(sum, 0)) {
@@ -12,6 +12,10 @@ class Reshaper extends Gate {
         }
         super("Reshaper", inputDims, outputDims);
         this._size = size;
+    }
+
+    static create(inputDims: GateDim[], outputDims: GateDim[]): Reshaper {
+        return new Reshaper("Reshaper", inputDims, outputDims);
     }
 
     call(this: Reshaper, inputs: GateData, state?: null): GateData {
@@ -34,7 +38,7 @@ class Reshaper extends Gate {
     }
 
     _duplicate(this: Reshaper): Reshaper {
-        return new Reshaper(this._inputDims, this._outputDims);
+        return Reshaper.create(this._inputDims, this._outputDims);
     }
 
     static JSONSyntaxError(msg: string): SyntaxError {
@@ -57,7 +61,7 @@ class Reshaper extends Gate {
                 if (!isGateDim(dim)) throw DirectedGraph.JSONSyntaxError("expected input dimension to be an integer");
                 outputDims.push(Number(dim));
             }
-            return new Reshaper(inputDims, outputDims);
+            return Reshaper.create(inputDims, outputDims);
         } else {
             return value;
         }

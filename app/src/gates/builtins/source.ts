@@ -2,8 +2,12 @@ import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/se
 import Gate, { GateDim, GateData, isGateDim } from "gates/gate"
 
 class Source extends Gate {
-    constructor(dims: GateDim[]) {
-        super("Source", [], dims);
+    constructor(name: "Source", inputDims: [], outputDims: GateDim[]) {
+        super("Source", [], outputDims);
+    }
+
+    static create(dims: GateDim[]): Source {
+        return new Source("Source", [], dims);
     }
 
     _initState(this: Source): GateData {
@@ -41,14 +45,14 @@ class Source extends Gate {
                 if (!isGateDim(dim)) throw Source.JSONSyntaxError("expected dimension to be an integer");
                 dims.push(dim);
             }
-            return new Source(dims);
+            return Source.create(dims);
         } else {
             return value;
         }
     }
 
     _duplicate(this: Source): Source {
-        return new Source(this._outputDims);
+        return Source.create(this._outputDims);
     }
 
     get dims() {

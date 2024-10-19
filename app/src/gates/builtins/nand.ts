@@ -6,6 +6,10 @@ class Nand extends Gate {
         super("NAND", [1, 1], [1]);
     }
 
+    static create(): Nand {
+        return new Nand();
+    }
+
     call(this: Nand, inputs: [[GateDatum], [GateDatum]], state?: null): [[GateDatum]] {
         if (typeof inputs[0][0] !== "number" || typeof inputs[1][0] !== "number") {
             return [[null]];

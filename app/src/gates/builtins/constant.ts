@@ -4,14 +4,18 @@ import Gate, { GateDim, GateDatum, isGateDatum} from "gates/gate"
 class Constant extends Gate {
     _state: [GateDatum[]];
 
-    constructor(dim: GateDim, state?: [GateDatum[]]) {
-        super("Constant", [], [dim]);
-        if (state === undefined) {
-            this._state = [[]];
-            this._resetState();
-        } else {
-            this._state = state;
+    constructor(name: "Constant", inputDims: [], outputDims: [GateDim]) {
+        super("Constant", [], outputDims);
+        this._state = [[]];
+        this._resetState();
+    }
+
+    static create(dim: GateDim, state?: [GateDatum[]]): Constant {
+        const constant = new Constant("Constant", [], [dim]);
+        if (state !== undefined) {
+            constant.setState(state);
         }
+        return constant;
     }
 
     _resetState(this: Constant) {
@@ -39,7 +43,7 @@ class Constant extends Gate {
                 if (!isGateDatum(s)) throw Constant.JSONSyntaxError("expected an integer or null in state array")
                 state.push(s)
             }
-            return new Constant(state.length, [state])
+            return Constant.create(state.length, [state])
         } else {
             return value
         }
@@ -54,7 +58,7 @@ class Constant extends Gate {
     }
 
     _duplicate(this: Constant): Constant {
-        return new Constant(
+        return Constant.create(
             this._outputDims[0],
             this._duplicateState(this._state)
         );

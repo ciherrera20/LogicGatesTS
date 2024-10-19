@@ -6,6 +6,10 @@ class Datetime extends Gate {
         super("Datetime", [], [64]);
     }
 
+    static create(): Datetime {
+        return new Datetime();
+    }
+
     call(this: Datetime, inputs?: [], state?: null): number[][] {
         const seconds: number = Math.round(new Date().getTime() / 1000);
         const timestamp: number[] = (seconds >>> 0).toString(2).split("").map((x) => Number(x));

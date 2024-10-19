@@ -3,9 +3,12 @@ import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/se
 type GateDim = number;
 type GateDatum = number | null;
 type GateData = GateDatum[][];
-type GateState = {
-    [key: string | GateUID]: GateData | [GateState, GateData]
-} | GateData | null;
+type GateState = GateStateMap | GateData | null;
+type GateStateMap = Map<GateUID, GateStateMapValue>;
+type GateStateMapValue = [GateState, GateData | null];
+// {
+//     [key: GateUID]: [GateState, GateData]
+// }
 type GateUID = number;
 
 abstract class Gate implements JSONSerializable {
@@ -56,7 +59,7 @@ abstract class Gate implements JSONSerializable {
         return JSON.parse(JSON.stringify(state));
     }
 
-    public get name(): string {
+    get name(): string {
         return this._name;
     }
 
@@ -91,7 +94,7 @@ abstract class Gate implements JSONSerializable {
             }
             s += `${strInputs.join(", ")} \u2192 `;
         }
-        s += this._name;
+        s += this.name;
         if (this._outputDims.length > 0) {
             const outputs = this.call(inputs, this._initState())
             const strOutputs: string[] = [];
@@ -113,5 +116,13 @@ function isGateDatum(value: any): value is GateDatum {
     return typeof value === "number" || value === null;
 }
 
+function isGateData(value: GateState): value is GateData {
+    return value instanceof Array;
+}
+
+function isGateStateMap(value: GateState): value is GateStateMap {
+    return value instanceof Map;
+}
+
 export default Gate;
-export { GateDim, GateDatum, GateData, GateState, GateUID, isGateDim, isGateDatum };
+export { GateDim, GateDatum, GateData, GateState, GateStateMap, GateStateMapValue, GateUID, isGateDim, isGateDatum, isGateData, isGateStateMap };
