@@ -6,6 +6,8 @@ import Nand from "gates/builtins/nand";
 import Reshaper from "gates/builtins/reshaper";
 import Sink from "gates/builtins/sink";
 import Source from "gates/builtins/source";
+import GateDefinition from "gates/gate_definition";
+import Project from "gates/project";
 
 const g = new DirectedGraph<string>();
 g.addVertex("A");
@@ -42,7 +44,7 @@ class StringWrapper implements JSONSerializable {
     toString(this: StringWrapper): string {
         return `StringWrapper(${this.myString})`;
     }
-    toJSON(this: StringWrapper): Exclude<JSONValue, JSONSerializable> {
+    toJSON(this: StringWrapper): JSONValue {
         return {"/StringWrapper": this.myString};
     }
     static JSONSyntaxError(msg: string) {
@@ -81,6 +83,8 @@ declare global {
     var Reshaper: any;
     var Sink: any;
     var Source: any;
+    var GateDefinition: any;
+    var Project: any;
 }
 globalThis.DirectedGraph = DirectedGraph;
 globalThis.g = g;
@@ -94,3 +98,19 @@ globalThis.Nand = Nand;
 globalThis.Reshaper = Reshaper;
 globalThis.Sink = Sink;
 globalThis.Source = Source;
+globalThis.GateDefinition = GateDefinition;
+globalThis.Project = Project;
+
+// let p = new Project("Test");
+// let nand = Nand.create();
+// let NotDefinition = p.define("Not", [1], [1]);
+// NotDefinition.addGate(nand);
+// NotDefinition.tieInputTo(0, [0, nand]);
+// NotDefinition.tieInputTo(0, [1, nand]);
+// NotDefinition.tieOutputTo([nand, 0], 0);
+// let not = NotDefinition.create();
+// let ClockDefinition = p.define("Clock", [], [1]);
+// ClockDefinition.addGate(not);
+// ClockDefinition.addConnection([not, 0], [0, not]);
+// ClockDefinition.tieOutputTo([not, 0], 0);
+// let clock = ClockDefinition.create();

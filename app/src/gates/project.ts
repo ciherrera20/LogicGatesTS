@@ -1,5 +1,5 @@
-import DirectedGraph from "utils/graph";
-import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/serialize";
+import DirectedGraph from "gates/utils/graph";
+import tsJSON, { JSONValue, JSONObj, JSONSerializable, JSONReviver } from "gates/utils/serialize";
 import Gate, { GateDim, GateUID } from "gates/gate";
 import Constant from "gates/builtins/constant";
 import Datetime from "gates/builtins/datetime";
@@ -7,7 +7,7 @@ import Nand from "gates/builtins/nand";
 import Reshaper from "gates/builtins/reshaper";
 import Sink from "gates/builtins/sink";
 import Source from "gates/builtins/source";
-import CompoundGate, { GateDefinition } from "gates/gate_definition";
+import { GateDefinition } from "gates/gate_definition";
 
 class Project implements JSONSerializable {
     static BUILTIN_GATES: Map<string, typeof Gate> = new Map()
@@ -29,7 +29,7 @@ class Project implements JSONSerializable {
         return Array.from(this._definitions.keys());
     }
 
-    define(this: Project, name: string, inputDims: GateDim[], outputDims: GateDim[], inputLabels?: string[], outputLabels?: string[]): GateDefinition {
+    define(this: Project, name: string, inputDims: GateDim[] = [], outputDims: GateDim[] = [], inputLabels?: string[], outputLabels?: string[]): GateDefinition {
         if (Project.BUILTIN_GATES.has(name) || this._definitions.has(name)) {
             throw new Error(`${name} already exists`);
         }
@@ -178,12 +178,61 @@ class Project implements JSONSerializable {
         });
     }
 
+    has(this: Project, name: string): boolean {
+        return Project.BUILTIN_GATES.has(name) || this._definitions.has(name);
+    }
+
+    get(this: Project, name: string): GateDefinition | typeof Gate | undefined {
+        if (Project.BUILTIN_GATES.has(name)) {
+            return Project.BUILTIN_GATES.get(name)!;
+        } else {
+            return this._definitions.get(name);
+        }
+    }
+
+    static isBuiltin(value: GateDefinition | typeof Gate): value is typeof Gate {
+        return Project.BUILTIN_GATES.has(value.name);
+    }
+
     toJSON() {
-        return undefined;
+        const definitions: JSONObj = {};
+        for (const [name, definition] of this._definitions) {
+            definitions[name] = definition;
+        }
+
+        return {"/Project": {
+            "name": this.name,
+            "dependencyGraph": this._dependencyGraph,
+            "definitions": definitions
+        }};
+    }
+
+    static JSONSyntaxError(msg: string): SyntaxError {
+        return new SyntaxError(`Project reviver: ${msg}`);
     }
 
     static reviver: JSONReviver<Project> = function(this, key, value) {
-
+        if (tsJSON.isJSONObj(value) && value["/Project"] !== undefined) {
+            const gates = new Map<number, Gate>();
+            const obj = value["/Project"];
+            if (!tsJSON.isJSONObj(obj)) throw Project.JSONSyntaxError("expected an object as top level object");
+            if (typeof obj["name"] !== "string") throw Project.JSONSyntaxError("expected a string as name");
+            if (!tsJSON.isJSONObj(obj["dependencyGraph"])) throw Project.JSONSyntaxError("expected an object as dependency graph");
+            if (!tsJSON.isJSONObj(obj["definitions"])) throw Project.JSONSyntaxError("expected an object as definitions dict");
+            const project = new Project(obj["name"]);
+            const dependencyGraph = DirectedGraph.getReviver<string>((k, v) => v).bind(obj)("dependencyGraph", obj["dependencyGraph"]) as DirectedGraph<string>;
+            const order = dependencyGraph.getOrder("NAND")[0];
+            for (const gateType of order.reverse()) {
+                if (!project.has(gateType)) {
+                    project._dependencyGraph.addVertex(gateType);
+                    const definition = GateDefinition.getReviver(project, gates).bind(obj["definitions"])("gateType", obj["definitions"][gateType]) as GateDefinition;
+                    project._definitions.set(gateType, definition);
+                }
+            }
+            return project;
+        } else {
+            return value;
+        }
     }
 }
 

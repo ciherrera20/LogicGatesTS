@@ -1,5 +1,5 @@
 import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/serialize";
-import Gate, { GateDim, GateDatum, isGateDatum} from "gates/gate"
+import Gate, { GateDim, GateDatum, isGateDatum, GateState} from "gates/gate"
 
 class Constant extends Gate {
     _state: [GateDatum[]];
@@ -26,7 +26,7 @@ class Constant extends Gate {
         return this._state;
     }
 
-    toJSON(this: Constant): Exclude<JSONValue, JSONSerializable> {
+    toJSON(this: Constant): JSONValue {
         return {"/Constant": this._state[0]};
     }
 
@@ -36,10 +36,10 @@ class Constant extends Gate {
 
     static reviver: JSONReviver<Constant> = function(this, key, value) {
         if (tsJSON.isJSONObj(value) && value["/Constant"] !== undefined) {
-            const constantObj = value["/Constant"];
-            if (!tsJSON.isJSONArray(constantObj)) throw Constant.JSONSyntaxError("expected an array as top level object");
+            const obj = value["/Constant"];
+            if (!tsJSON.isJSONArray(obj)) throw Constant.JSONSyntaxError("expected an array as top level object");
             const state: GateDatum[] = []
-            for (const s of constantObj) {
+            for (const s of obj) {
                 if (!isGateDatum(s)) throw Constant.JSONSyntaxError("expected an integer or null in state array")
                 state.push(s)
             }
@@ -47,6 +47,13 @@ class Constant extends Gate {
         } else {
             return value
         }
+    }
+
+    static reviveState(obj: JSONValue, gates: Map<number, Gate>): [GateDatum[]] {
+        if (!tsJSON.isJSONArray(obj)) throw Constant.JSONSyntaxError("expected array as state");
+        const state = Gate.validateGateData(obj);
+        if (state.length === 0 || state[0] === null) throw Constant.JSONSyntaxError("expected a single, non null array as state");
+        return state as [GateDatum[]];
     }
 
     getState(this: Constant): [GateDatum[]] {
@@ -62,6 +69,10 @@ class Constant extends Gate {
             this._outputDims[0],
             this._duplicateState(this._state)
         );
+    }
+
+    _duplicateState(this: Gate, state: [GateDatum[]]): [GateDatum[]] {
+        return tsJSON.parse(tsJSON.stringify(state));
     }
 
     get dims() {

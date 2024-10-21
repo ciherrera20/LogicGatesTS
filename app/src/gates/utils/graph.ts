@@ -22,7 +22,7 @@ import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/se
 //     getAllPredecessors:             (this: DirectedGraph<V>, v: V) => Set<V>;
 //     copy:                           (this: DirectedGraph<V>) => DirectedGraph<V>;
 //     toString:                       (thisk: DirectedGraph<V>) => string;
-//     toJSON:                         (this: DirectedGraph<V>) => Exclude<JSONValue, JSONSerializable>;
+//     toJSON:                         (this: DirectedGraph<V>) => JSONValue;
 // };
 
 class DirectedGraph<V extends JSONValue> implements JSONSerializable {
@@ -452,7 +452,7 @@ class DirectedGraph<V extends JSONValue> implements JSONSerializable {
         return s;
     };
 
-    toJSON(this: DirectedGraph<V>): Exclude<JSONValue, JSONSerializable> {
+    toJSON(this: DirectedGraph<V>): JSONValue {
         const vertexSerializedList: JSONValue[] = [];
         const edgeDict: {[id: number]: number[]} = {};
         const obj: {"/DirectedGraph": [JSONValue[], {[id: number]: number[]}]} = {"/DirectedGraph": [vertexSerializedList, edgeDict]};
@@ -482,12 +482,12 @@ class DirectedGraph<V extends JSONValue> implements JSONSerializable {
     static getReviver<V extends JSONValue>(this: void, vReviver: JSONReviver<V>): JSONReviver<DirectedGraph<V>> {
         const reviver: JSONReviver<DirectedGraph<V>> = function(this, key, value) {
             if (tsJSON.isJSONObj(value) && value["/DirectedGraph"] !== undefined) {
-                const graphObj = value["/DirectedGraph"];
-                if (!tsJSON.isJSONArray(graphObj)) throw DirectedGraph.JSONSyntaxError("expected an array as top level object");
-                if (!tsJSON.isJSONArray(graphObj[0])) throw DirectedGraph.JSONSyntaxError("expected an array at index 0 as vertex list");
-                if (!tsJSON.isJSONObj(graphObj[1])) throw DirectedGraph.JSONSyntaxError("expected an object at index 1 as edges dict");
-                const vertexSerializedList = graphObj[0];  // Serialized vertices
-                const edgeDict = graphObj[1];  // Dictionary of edges
+                const obj = value["/DirectedGraph"];
+                if (!tsJSON.isJSONArray(obj)) throw DirectedGraph.JSONSyntaxError("expected an array as top level object");
+                if (!tsJSON.isJSONArray(obj[0])) throw DirectedGraph.JSONSyntaxError("expected an array at index 0 as vertex list");
+                if (!tsJSON.isJSONObj(obj[1])) throw DirectedGraph.JSONSyntaxError("expected an object at index 1 as edges dict");
+                const vertexSerializedList = obj[0];  // Serialized vertices
+                const edgeDict = obj[1];  // Dictionary of edges
                 const vertexList: V[] = [];  // Deserialized vertices
                 const graph = new DirectedGraph<V>();  // The graph to create
 

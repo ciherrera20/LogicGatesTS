@@ -17,7 +17,7 @@ class Datetime extends Gate {
         return [pad.concat(timestamp)]
     }
 
-    toJSON(this: Datetime): Exclude<JSONValue, JSONSerializable> {
+    toJSON(this: Datetime): JSONValue {
         return {"/Datetime": null};
     }
 
@@ -31,8 +31,8 @@ class Datetime extends Gate {
 
     static reviver: JSONReviver<Datetime> = function(this, key, value) {
         if (tsJSON.isJSONObj(value) && value["/Datetime"] !== undefined) {
-            const datetimeObj = value["/Datetime"];
-            if (!tsJSON.isJSONArray(datetimeObj)) throw Datetime.JSONSyntaxError("expected null as top level object");
+            const obj = value["/Datetime"];
+            if (!tsJSON.isJSONArray(obj)) throw Datetime.JSONSyntaxError("expected null as top level object");
             return new Datetime();
         } else {
             return value;

@@ -37,7 +37,7 @@ type JSONObj = {
 };
 
 type JSONSerializable = {
-    toJSON: () => Exclude<JSONValue, JSONSerializable>;
+    toJSON: () => JSONValue;
 };
 
 type JSONCompatible<T> = unknown extends T ? never : {
@@ -56,7 +56,7 @@ type JSONReplacer = (this: JSONValue, key: string, value: JSONValue) => JSONValu
 
 type JSONReplacerArray = (number | string)[]
 
-type JSONReviver<T> = (this: JSONObj | JSONArray, key: string, value: JSONValue) => T | JSONValue
+type JSONReviver<T> = (this: JSONObj | JSONArray, key: string | number, value: JSONValue) => T | JSONValue
 
 interface tsJSON {
     parse<T>(

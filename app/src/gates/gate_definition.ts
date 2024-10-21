@@ -1,16 +1,16 @@
-import Gate, { GateDim, GateData, GateState, GateStateMap, GateStateMapValue, GateUID, isGateData, isGateStateMap } from "gates/gate";
+import Gate, { GateDim, GateDatum, GateData, GateState, GateStateMap, GateStateMapValue, GateUID, isGateDim, isGateData, isGateStateMap } from "gates/gate";
 import Sink from "gates/builtins/sink";
 import Source from "gates/builtins/source";
 import DirectedGraph from "gates/utils/graph";
-import tsJSON, { JSONValue, JSONSerializable, JSONReviver } from "gates/utils/serialize";
+import tsJSON, { JSONValue, JSONArray, JSONObj, JSONSerializable, JSONReviver } from "gates/utils/serialize";
 import Project from "gates/project";
 
 class CompoundGate extends Gate {
     _definition: GateDefinition;
 
     constructor(name: "CompoundGate", inputDims: GateDim[], outputDims: GateDim[], inputLabels: string[], outputLabels: string[], definition: GateDefinition) {
-        // TODO: Use definition to get dimensions and labels, and create copies
-        super("CompoundGate", inputDims, outputDims, inputLabels, outputLabels);
+        // TODO: Check whether copies are needed here
+        super("CompoundGate", definition.inputDims, definition.outputDims, definition.inputLabels, definition.outputLabels);
         this._definition = definition
     }
 
@@ -22,15 +22,44 @@ class CompoundGate extends Gate {
         return this._definition._initState();
     }
 
-    call(this: CompoundGate, inputs?: GateData, state?: GateState): GateData {
-        return this._definition._processState(inputs, state);
+    call(this: CompoundGate, inputs?: GateData, state?: GateStateMap | null): GateData {
+        if (inputs === undefined) {
+            if (this.inputDims.length !== 0) {
+                throw new Error("invalid number of inputs");
+            } else {
+                return this._definition._processState([], state);
+            }
+        } else {
+            return this._definition._processState(inputs, state);
+        }
     }
 
-    toJSON(this: CompoundGate): Exclude<JSONValue, JSONSerializable> {
-        return this._definition.toJSON();
+    toJSON(this: CompoundGate): JSONValue {
+        const obj: JSONObj = {};
+        obj[`/${this.name}`] = null;
+        return obj;
     }
 
-    static getReviver(project: Project): JSONReviver<CompoundGate> {}
+    stateToJSON(this: CompoundGate, state: GateStateMap | null): JSONValue {
+        return this._definition.stateToJSON(state);
+    }
+
+    // static JSONSyntaxError(msg: string): SyntaxError {
+    //     return new SyntaxError(`CompoundGate reviver: ${msg}`);
+    // }
+
+    // static getReviver(project: Project): JSONReviver<CompoundGate> {
+    //     const reviver: JSONReviver<CompoundGate> = function(this, key, value) {
+    //         if (tsJSON.isJSONObj(value) && value["/CompoundGate"] !== undefined) {
+    //             const obj = value["/CompoundGate"];
+    //             if (typeof obj !== "string") throw CompoundGate.JSONSyntaxError("expected string as top level object");
+    //             const definition = project.get(obj)!;
+    //             if (Project.isBuiltin(definition)) throw CompoundGate.JSONSyntaxError("expected non builtin gate as type");
+    //             return CompoundGate.create(definition);
+    //         }
+    //     }
+    //     return reviver;
+    // }
 
     _duplicate(this: CompoundGate): CompoundGate {
         return CompoundGate.create(this._definition);
@@ -43,8 +72,6 @@ class CompoundGate extends Gate {
 
 type FromPair = [Gate, number];
 type ToPair = [number, Gate];
-
-// type ConnectionMap = Map<GateUID, Map<GateUID, Map<number, number>>>;
 
 class ConnectionMap {
     _cmap: Map<GateUID, Map<GateUID, Map<number, Set<number>>>>;
@@ -151,8 +178,6 @@ let y: MapIterator<number>;
 class GateDefinition implements JSONSerializable {
     _name:          string;
     _project:       Project;
-    _numInputs:     number;
-    _numOutputs:    number;
     _inputDims:     GateDim[];
     _outputDims:    GateDim[];
     _inputLabels:   string[];
@@ -167,7 +192,7 @@ class GateDefinition implements JSONSerializable {
     // Maintain the definition's state
     _state:         {
                         inputs: GateData,
-                        instance: GateStateMap,
+                        gates: GateStateMap,
                         outputs: GateData
                     };
 
@@ -190,17 +215,15 @@ class GateDefinition implements JSONSerializable {
         this._project = project;
         this._inputDims = inputDims;
         this._outputDims = outputDims;
-        this._numInputs = inputDims.length;
-        this._numOutputs = outputDims.length;
-        this._inputLabels = inputLabels ? inputLabels : new Array(this._numInputs).fill("")
-        this._outputLabels = outputLabels ? outputLabels : new Array(this._numOutputs).fill("")
+        this._inputLabels = inputLabels ? inputLabels : new Array(this.numInputs).fill("")
+        this._outputLabels = outputLabels ? outputLabels : new Array(this.numOutputs).fill("")
         this._graph = new DirectedGraph();
         this._gates = new Map();
         this._gateTypes = new Map();
         this._connections = new ConnectionMap();
-        this._state = {"inputs": [], "instance": new Map(), "outputs": []};
-        this._source = Source.create(this._inputDims);
-        this._sink = Sink.create(this._outputDims);
+        this._state = {"inputs": [], "gates": new Map(), "outputs": []};
+        this._source = Source.create(this._inputDims, this._inputLabels);
+        this._sink = Sink.create(this._outputDims, this._outputLabels);
         this._order = [];
         this._cutGates = new Set();
         this._statefulGates = new Set();
@@ -208,8 +231,8 @@ class GateDefinition implements JSONSerializable {
         this._reorder = true;
         this._instanceUids = new Set();
 
-        this.addGate(this._sink);
         this.addGate(this._source);
+        this.addGate(this._sink);
     }
 
     /**
@@ -270,7 +293,7 @@ class GateDefinition implements JSONSerializable {
             if (outputs === undefined) {
                 outputs = gate.call(gate._initInputs(), state);
             }
-            this._state.instance.set(gate.uid, [state, outputs]);
+            this._state.gates.set(gate.uid, [state, outputs]);
         }
     }
 
@@ -354,8 +377,8 @@ class GateDefinition implements JSONSerializable {
         if (!this._gates.has(toGate.uid)) {
             throw new Error(`${toGate} is not in the definition`);
         }
-        if (inputIdx >= toGate.outputDims.length) {
-            throw new Error(`Invalid output index ${inputIdx} for ${toGate}`);
+        if (inputIdx >= toGate.inputDims.length) {
+            throw new Error(`Invalid input index ${inputIdx} for ${toGate}`);
         }
     }
 
@@ -380,8 +403,16 @@ class GateDefinition implements JSONSerializable {
             throw new Error(`${this.name}. Mismatched dimensions. (${fromGate.name}:${fromGate.uid}, ${outputIdx}) has dimension ${fromDim} while (${inputIdx}, ${toGate.name}:${toGate.uid}) has dimension ${toDim}`);
         }
 
-        // If a connection between the two gates does not yet exist, create it
-        const m = this._connections.add([fromGate.uid, toGate.uid], [outputIdx, inputIdx]);
+        // If a connection between the two gates does not yet exist, add a graph edge between them
+        const key: [number, number] = [fromGate.uid, toGate.uid];
+        if (!this._connections.has(key)) {
+            this._reorder = true;  // Edge has been created
+            this._graph.addEdge(fromGate.uid, toGate.uid);
+        }
+
+        // Add the connection
+        console.log(`Adding connection: (${fromGate})[${outputIdx}] \u2192 [${inputIdx}](${toGate})`);
+        this._connections.add(key, [outputIdx, inputIdx]);
     }
 
     /**
@@ -538,7 +569,7 @@ class GateDefinition implements JSONSerializable {
     }
 
     /**
-     * Move all of the given gate's incoming connections after idx to the right by 1
+     * Move all of the given gate's incoming connections after (and including) idx to the right by 1
      * 
      * @param gate
      * @param idx
@@ -561,7 +592,7 @@ class GateDefinition implements JSONSerializable {
     }
 
     /**
-     * Move all of the given gate's outgoing connections after idx to the right by 1
+     * Move all of the given gate's outgoing connections after (and including) idx to the right by 1
      * 
      * @param gate
      * @param idx
@@ -647,10 +678,10 @@ class GateDefinition implements JSONSerializable {
      * @param proc          Function to run on instances of `definition[0]`
      * @param states        Recursive helper parameter, should be undefined on the first call
      */
-    _runOnTypeStates(this: GateDefinition, definitions: GateDefinition[], proc: (pair: GateStateMapValue) => GateStateMapValue, states?: GateStateMap[]) {
+    _runOnTypeStates(this: GateDefinition, definitions: GateDefinition[], proc: (gsMapVal: GateStateMapValue) => GateStateMapValue, states?: GateStateMap[]) {
         // Run on the definition's instance
         if (states === undefined) {
-            states = [this._state.instance];
+            states = [this._state.gates];
         }
 
         // Grab a definition
@@ -725,62 +756,695 @@ class GateDefinition implements JSONSerializable {
         }
     }
 
-    _insertedInput(this: GateDefinition, definition: GateDefinition, idx: number) {}
-
-    _insertedOutput(this: GateDefinition, definitions: GateDefinition[], idx: number) {}
-
-    _removedInput(this: GateDefinition, definition: GateDefinition, idx: number) {}
-
-    _removedOutput(this: GateDefinition, definitions: GateDefinition[], idx: number) {}
-
-    _removeUid(this: GateDefinition, definitions: GateDefinition[], uid: GateUID) {}
-
-    insertInput(this: GateDefinition, idx: number, dim: GateDim, label: string = "") {}
-
-    insertOutput(this: GateDefinition, idx: number, dim: GateDim, label: string = "") {}
-
-    // TODO: add label argument
-    appendInput(this: GateDefinition, dim: GateDim) {}
-
-    // TODO: add label argument
-    appendOutput(this: GateDefinition, dim: GateDim) {}
-
-    swapInputs(this: GateDefinition, idx0: number, idx1: number) {}
-
-    // TODO: test python implementation, since it currently doesn't recursively update the state
-    swapOutputs(this: GateDefinition, idx0: number, idx1: number) {}
-
-    removeInput(this: GateDefinition, idx: number) {}
-
-    removeOutput(this: GateDefinition, idx: number) {}
-
-    popInput(this: GateDefinition) {}
-
-    popOutput(this: GateDefinition) {}
-
-    reshapeInput(this: GateDefinition, idx: number, dim: GateDim) {}
-
-    reshapeOutput(this: GateDefinition, idx: number, dim: GateDim) {}
-
-    renameInput(this: GateDefinition, idx: number, label: string = "") {}
-
-    renameOutput(this: GateDefinition, idx: number, label: string = "") {}
-
-    _initInputs(this: GateDefinition): GateData {}
-
-    _updateOrder(this: GateDefinition) {}
-
-    _initState(this: GateDefinition): GateStateMap | null {}
-
-    _processState(this: GateDefinition, inputs?: GateData, state?: GateState)
-
-    tick(this: GateDefinition) {}
-
-    toJSON() {
-        return undefined;
+    _insertedInput(this: GateDefinition, definition: GateDefinition, idx: number) {
+        for (const uid of this._gateTypes.get(definition.name)!) {
+            this._shiftIncomingRight(this._gates.get(uid)!, idx);
+        }
     }
 
-    static getReviver(): JSONReviver<GateDefinition> {}
+    _insertedOutput(this: GateDefinition, definitions: GateDefinition[], idx: number) {
+        if (definitions.length === 1) {
+            for (const uid of this._gateTypes.get(definitions[0].name)!) {
+                this._shiftOutgoingRight(this._gates.get(uid)!, idx);
+            }
+        }
+
+        const dim = definitions[0].outputDims[idx];
+        this._runOnTypeStates(definitions, (gsMapVal) => {
+            const [, outputs] = gsMapVal;
+            if (outputs !== null) {
+                const newOutput = new Array(dim).fill(Gate.DEFAULT_VALUE);
+                outputs.splice(idx, 0, newOutput);
+            }
+            return gsMapVal;
+        });
+    }
+
+    _removedInput(this: GateDefinition, definition: GateDefinition, idx: number) {
+        for (const uid of this._gateTypes.get(definition.name)!) {
+            this._shiftIncomingLeft(this._gates.get(uid)!, idx);
+        }
+    }
+
+    _removedOutput(this: GateDefinition, definitions: GateDefinition[], idx: number) {
+        if (definitions.length === 1) {
+            for (const uid of this._gateTypes.get(definitions[0].name)!) {
+                this._shiftOutgoingLeft(this._gates.get(uid)!, idx);
+            }
+        }
+
+        this._runOnTypeStates(definitions, (gsMapVal) => {
+            const [, outputs] = gsMapVal;
+            if (outputs !== null) {
+                outputs.splice(idx, 1);
+            }
+            return gsMapVal;
+        });
+    }
+
+    _removeUid(this: GateDefinition, definitions: GateDefinition[], uid: GateUID) {
+        this._runOnTypeStates(definitions, (gsMapVal) => {
+            const [gateState,] = gsMapVal;
+            if (gateState !== null) {
+                if (!isGateStateMap(gateState)) throw new Error("Instance state should be of type GateStateMap. This case should not be possible.");
+                gateState.delete(uid);
+            }
+            return gsMapVal;
+        });
+    }
+
+    /**
+     * Insert a new input for the definition at idx with the given dimension
+     * All inputs greater than or equal to idx are shifted over by one
+     * 
+     * @param idx   Idx to insert at
+     * @param dim   New input's dimension
+     * @param label New input's label
+     */
+    insertInput(this: GateDefinition, idx: number, dim: GateDim, label: string = "") {
+        if (idx > this.numInputs) {
+            throw new Error(`Invalid insertion index: ${idx}`);
+        }
+
+        // Update input dimensions
+        this._inputDims.splice(idx, 0, dim);
+        this._inputLabels.splice(idx, 0, label);
+
+        // Update source state
+        this._state.inputs.splice(idx, 0, new Array(dim).fill(Gate.DEFAULT_VALUE));
+        this._shiftOutgoingRight(this._source, idx);
+        this._project._insertedInput(this, idx);
+    }
+
+    /**
+     * Insert a new output for the definition at idx with the given dimension
+     * All outputs greater than or equal to idx are shifted over by one
+     * 
+     * @param idx   Idx to insert at
+     * @param dim   New output's dimension
+     * @param label New output's label
+     */
+    insertOutput(this: GateDefinition, idx: number, dim: GateDim, label: string = "") {
+        if (idx > this.numOutputs) {
+            throw new Error(`Invalid insertion index: ${idx}`);
+        }
+
+        // Update output dimensions
+        this._outputDims.splice(idx, 0, dim);
+        this._outputLabels.splice(idx, 0, label);
+
+        // Update sink state
+        this._state.outputs.splice(idx, 0, new Array(dim).fill(Gate.DEFAULT_VALUE));
+        this._shiftIncomingRight(this._sink, idx);
+        this._project._insertedOutput(this, idx);
+    }
+
+    /**
+     * Add a new input to the definition at the end of the current inputs
+     * 
+     * @param dim
+     */
+    appendInput(this: GateDefinition, dim: GateDim, label: string = "") {
+        this.insertInput(this.numInputs, dim, label)
+    }
+
+    /**
+     * Add a new output to the definition at the end of the current outputs
+     * 
+     * @param dim 
+     */
+    appendOutput(this: GateDefinition, dim: GateDim, label: string = "") {
+        this.insertOutput(this.numOutputs, dim, label);
+    }
+
+    /**
+     * Swap two of the definition's inputs
+     * 
+     * @param idx0
+     * @param idx1
+     */
+    swapInputs(this: GateDefinition, idx0: number, idx1: number) {
+        if (idx0 >= this.numInputs) {
+            throw new Error(`First given swap index is invalid: ${idx0}`);
+        }
+        if (idx1 >= this.numInputs) {
+            throw new Error(`First given swap index is invalid: ${idx1}`);
+        }
+
+        // Swap connections from idx0 to idx1 and vice versa
+        for (const successor of this._graph.getDirectSuccessors(this._source.uid)) {
+            const key: [number, number] = [this._source.uid, successor];
+            const newPairs: [number, number][] = [];
+            for (let [outputIdx, inputIdx] of this._connections.get(key)!) {
+                if (outputIdx === idx0) {
+                   outputIdx = idx1; 
+                } else if (outputIdx === idx1) {
+                    outputIdx = idx0;
+                }
+                newPairs.push([outputIdx, inputIdx]);
+            }
+            for (const idxs of newPairs) {
+                this._connections.add(key, idxs);
+            }
+        }
+        
+        // Update input dimensions
+        const [dim0, dim1] = [this.inputDims[idx0], this.inputDims[idx1]];
+        this.inputDims[idx0] = dim1;
+        this.inputDims[idx1] = dim0;
+
+        // Update input labels
+        const [label0, label1] = [this.inputLabels[idx0], this.inputLabels[idx1]];
+        this.inputLabels[idx0] = label1;
+        this.inputLabels[idx1] = label0;
+
+        // Update definition's sttate
+        const [input0, input1] = [this._state.inputs[idx0], this._state.inputs[idx1]];
+        this._state.inputs[idx0] = input1;
+        this._state.inputs[idx1] = input0;
+    }
+
+    // TODO: test implementation, since it currently doesn't recursively update the state
+    /**
+     * Swap two of the definition's outputs 
+     *
+     * @param idx0
+     * @param idx1
+     */
+    swapOutputs(this: GateDefinition, idx0: number, idx1: number) {
+        if (idx0 >= this.numOutputs) {
+            throw new Error(`First given swap index is invalid: ${idx0}`);
+        }
+        if (idx1 >= this.numOutputs) {
+            throw new Error(`First given swap index is invalid: ${idx1}`);
+        }
+
+        // Swap connections from idx0 to idx1 and vice versa
+        for (const predecessor of this._graph.getDirectSuccessors(this._sink.uid)) {
+            const key: [number, number] = [predecessor, this._sink.uid];
+            const newPairs: [number, number][] = [];
+            for (let [outputIdx, inputIdx] of this._connections.get(key)!) {
+                if (inputIdx === idx0) {
+                   inputIdx = idx1; 
+                } else if (inputIdx === idx1) {
+                    inputIdx = idx0;
+                }
+                newPairs.push([outputIdx, inputIdx]);
+            }
+            for (const idxs of newPairs) {
+                this._connections.add(key, idxs);
+            }
+        }
+        
+        // Update output dimensions
+        const [dim0, dim1] = [this.outputDims[idx0], this.outputDims[idx1]];
+        this.outputDims[idx0] = dim1;
+        this.outputDims[idx1] = dim0;
+
+        // Update output labels
+        const [label0, label1] = [this.outputLabels[idx0], this.outputLabels[idx1]];
+        this.outputLabels[idx0] = label1;
+        this.outputLabels[idx1] = label0;
+
+        // Update definition's sttate
+        const [output0, output1] = [this._state.outputs[idx0], this._state.outputs[idx1]];
+        this._state.outputs[idx0] = output1;
+        this._state.outputs[idx1] = output0;
+
+        // // Update states in every definition that depends on this one
+        // this._project._runOnDependees(this, (definition, acc) => {
+        //     definition._runOnTypeStates(acc, (gsMapVal) => {
+        //         const [, outputs] = gsMapVal;
+        //         if (outputs !== null) {
+        //             const [output0, output1] = [outputs[idx0], outputs[idx1]];
+        //             outputs[idx0] = output1;
+        //             outputs[idx1] = output0;
+        //         }
+        //         return gsMapVal;
+        //     });
+        // });
+    }
+
+    /**
+     * Remove one of the definition's inputs
+     * 
+     * @param idx
+     */
+    removeInput(this: GateDefinition, idx: number) {
+        if (idx >= this.numInputs) {
+            throw new Error(`Input index is invalid: ${idx}`);
+        }
+        
+        // Update input dimensions
+        this._inputDims.splice(idx, 1);
+        this._inputLabels.splice(idx, 1);
+
+        // Update source state
+        this._state.inputs.splice(idx, 1);
+
+        this._shiftOutgoingLeft(this._source, idx);
+        this._project._removedInput(this, idx);
+    }
+
+    /**
+     * Remove one of the definition's outputs
+     * 
+     * @param idx
+     */
+    removeOutput(this: GateDefinition, idx: number) {
+        if (idx >= this.numOutputs) {
+            throw new Error(`Output index is invalid: ${idx}`);
+        }
+
+        // Update output dimensions
+        this._outputDims.splice(idx, 1);
+        this._outputLabels.splice(idx, 1);
+
+        // Update sink state
+        this._state.outputs.splice(idx, 1);
+
+        this._shiftIncomingLeft(this._sink, idx);
+        this._project._removedOutput(this, idx);
+    }
+
+    /**
+     * Remove the definition's last input
+     */
+    popInput(this: GateDefinition) {
+        if (this.numInputs === 0) {
+            throw new Error("Cannot pop an input because the number of inputs is 0");
+        }
+        this.removeInput(this.numInputs - 1);
+    }
+
+    /**
+     * Remove the definition's last output
+     */
+    popOutput(this: GateDefinition) {
+        if (this.numOutputs === 0) {
+            throw new Error("Cannot pop an output because the number of outputs is 0");
+        }
+        this.removeOutput(this.numOutputs - 1);
+    }
+
+    // TODO: probably need to disconnect connected gates in definitions that depend on this one
+    // TODO: instead of clearing the input, display a warning
+    /**
+     * Set a new dimension for the given input
+     * 
+     * @param idx
+     * @param dim
+     */
+    reshapeInput(this: GateDefinition, idx: number, dim: GateDim) {
+        if (idx >= this.numInputs) {
+            throw new Error(`Input index is invalid: ${idx}`);
+        }
+        const oldDim = this._inputDims[idx];
+        if (oldDim !== dim) {
+            this.clearInput(idx);  // Disconnect since the new dimension doesn't match the old one
+        }
+        this._inputDims[idx] = dim
+    }
+
+    // TODO: probably need to disconnect connected gates in definitions that depend on this one
+    // TODO: instead of clearing the output, display a warning
+    /**
+     * Set a new dimension for the given input
+     * 
+     * @param idx
+     * @param dim
+     */
+    reshapeOutput(this: GateDefinition, idx: number, dim: GateDim) {
+        if (idx >= this.numOutputs) {
+            throw new Error(`Output index is invalid: ${idx}`);
+        }
+        const oldDim = this._outputDims[idx];
+        if (oldDim !== dim) {
+            this.clearOutput(idx);  // Disconnect since the new dimension doesn't match the old one
+        }
+        this._outputDims[idx] = dim
+    }
+
+    /**
+     * Set a new label for the given input
+     * 
+     * @param idx
+     * @param label
+     */
+    renameInput(this: GateDefinition, idx: number, label: string = "") {
+        if (idx >= this.numInputs) {
+            throw new Error(`Input index is invalid: ${idx}`);
+        }
+        this._inputLabels[idx] = label;
+        // this._source._outputLabels[idx] = label;  // TODO: figure out if this is necessary
+    }
+
+    renameOutput(this: GateDefinition, idx: number, label: string = "") {
+        if (idx >= this.numOutputs) {
+            throw new Error(`Output index is invalid: ${idx}`);
+        }
+        this._outputLabels[idx] = label;
+        // this._sink._outputLabels[idx] = label;
+    }
+
+    _initInputs(this: GateDefinition): GateData {
+        return this._source._initState();
+    }
+
+    _updateOrder(this: GateDefinition) {
+        // Compute a new evaluation order if necessary
+        if (this._reorder) {
+            let cutEdges: [number, number][];
+            [this._order, cutEdges] = this._graph.getOrder(this._source.uid);
+            this._cutGates = new Set();
+            for (const [v,] of cutEdges) {
+                this._cutGates.add(v);
+            }
+            this._rootedGates = this._graph.getAllPredecessors(this._sink.uid);
+            this._rootedGates.add(this._sink.uid);
+            this._reorder = false;
+        }
+    }
+
+    /**
+     * Initialize a state
+     */
+    _initState(this: GateDefinition): GateStateMap | null {
+        this._updateOrder();
+
+        // Sore the gates for each gate in the definition if needed
+        const state: GateStateMap = new Map();
+        this._statefulGates = new Set();
+        for (const [gateUid, gate] of this._gates) {
+            // Don't store the source, sink, or any gate that is not a predecessor of the sink
+            if (gateUid !== this._source.uid && gateUid !== this._sink.uid && this._rootedGates.has(gateUid)) {
+                // We only need to store a gate's state if it is not null
+                const gateState = gate._initState();
+                if (gateState !== null) {
+                    this._statefulGates.add(gate.uid);
+                }
+
+                // We only need to store a gate's outputs if it is a cut gate
+                let outputs: GateData | null;
+                if (this._cutGates.has(gateUid)) {
+                    outputs = gate.call(gate._initInputs(), gateState);
+                } else {
+                    outputs = null;
+                }
+
+                // If both the state and outputs are null, we don't need to store anything
+                if (gateState !== null || outputs !== null) {
+                    state.set(gateUid, [gateState, outputs]);
+                }
+            }
+        }
+
+        // Return null if this gate does not need to store a state
+        return state.size === 0 ? null : state;
+    }
+
+    /**
+     * Process a given state
+     * 
+     * @param inputs
+     * @param state
+     */
+    _processState(this: GateDefinition, inputs: GateData, state?: GateStateMap | null, all: boolean = false): GateData {
+        this._updateOrder();
+
+        // Evaluate each gate to compute the final output
+        const outputs: Map<GateUID, GateData> = new Map([[this._source.uid, inputs]]);
+        let finalOutputs: GateData = [];
+        for (const gateUid of this._order) {
+            // Skip over the restt of the code for the source since we don't need to do any computation for it
+            if (gateUid === this._source.uid) {
+                continue;
+            }
+
+            // Skip over gates that are not connected
+            if (!this._rootedGates.has(gateUid) && !all) {
+                continue;
+            }
+
+            // Retrieve the gate
+            const gate = this._gates.get(gateUid)!;
+
+            // Get the inputs to the gate from its predecessors
+            const gateInputs = gate._initInputs();
+            for (const predecessor of this._graph.getDirectPredecessors(gateUid)) {
+                for (const [outputIdx, inputIdx] of this._connections.get([predecessor, gateUid])!) {
+                    if (outputs.has(predecessor)) {
+                        gateInputs[inputIdx] = outputs.get(predecessor)![outputIdx];
+                    } else if (state !== null && state !== undefined && state.has(predecessor)) {
+                        // Predecessor's outputs have not yet been computed, grab the previous ones from the state
+                        const [, storedOutputs] = state.get(predecessor)!;
+                        if (storedOutputs === null) {
+                            gateInputs[inputIdx] = null;
+                        } else {
+                            gateInputs[inputIdx] = storedOutputs[outputIdx];
+                        }
+                    } else {
+                        gateInputs[inputIdx] = null;
+                    }
+                }
+            }
+
+            // Save outputs
+            if (gateUid === this._sink.uid) {
+                finalOutputs = gateInputs;
+            } else {
+                // Update state if necessary
+                let gateOutputs: GateData;
+                if (state !== null && state !== undefined && state.has(gateUid)) {
+                    const [gateState, oldOutputs] = state.get(gateUid)!
+                    console.log(`Calling ${gate} with ${gateInputs} and state ${gateState}`);
+                    gateOutputs = gate.call(gateInputs, gateState);
+                    if (oldOutputs === null) {
+                        state.set(gateUid, [gateState, null]);
+                    } else {
+                        state.set(gateUid, [gateState, gateOutputs]);
+                    }
+                } else {
+                    console.log(`Calling ${gate} with ${gateInputs}`);
+                    gateOutputs = gate.call(gateInputs);
+                }
+                outputs.set(gateUid, gateOutputs);
+            }
+        }
+        return finalOutputs;
+    }
+
+    tick(this: GateDefinition) {
+        this._state.outputs = this._processState(this._state.inputs, this._state.gates, true);
+    }
+
+    toJSON(this: GateDefinition): JSONValue {
+        // Serialize gates
+        const gates: JSONObj = {};
+        for (const [uid, gate] of this._gates) {
+            if (gate !== this._source && gate !== this._sink) {
+                gates[uid] = gate.toJSON();
+            }
+        }
+
+        // Reformat connections for serialization
+        const connections: JSONObj = {};
+        for (const [[fromUid, toUid], pairs] of this._connections) {
+            if (connections[fromUid] === undefined) {
+                connections[fromUid] = {};
+            }
+            (connections[fromUid] as JSONObj)[toUid] = Array.from(pairs);
+        }
+
+        // Return JSONValue object
+        return {"/GateDefinition": {
+            "name": this.name,
+            "inputDims": this.inputDims,
+            "outputDims": this.outputDims,
+            "inputLabels": this.inputLabels,
+            "outputLabels": this.outputLabels,
+            "source": this._source.uid,
+            "sink": this._sink.uid,
+            "gates": gates,
+            "connections": connections,
+            "state": {
+                "inputs": this._state.inputs,
+                "outputs": this._state.outputs,
+                "gates": this.stateToJSON(this._state.gates)
+            }
+        }};
+    }
+
+    stateToJSON(this: GateDefinition, state: GateStateMap | null): JSONValue {
+        if (state === null) {
+            return null;
+        }
+
+        const obj: JSONObj = {};
+        for (const [uid, [gateState, outputs]] of state) {
+            // Handle invalid states
+            if (this._gates.has(uid)) {
+                obj[uid] = [this._gates.get(uid)!.stateToJSON(gateState), outputs];
+            } else {
+                obj[uid] = [null, outputs];
+            }
+        }
+        return obj;
+    }
+
+    static JSONSyntaxError(msg: string): SyntaxError {
+        return new SyntaxError(`GateDefinition reviver: ${msg}`);
+    }
+
+    static getReviver(project: Project, gates: Map<number, Gate>): JSONReviver<GateDefinition> {
+        const reviver: JSONReviver<GateDefinition> = function(this, key, value) {
+            if (tsJSON.isJSONObj(value) && value["/GateDefinition"] !== undefined) {
+                const obj = value["/GateDefinition"];
+                if (!tsJSON.isJSONObj(obj)) throw GateDefinition.JSONSyntaxError("expected an object as top level object");
+                if (typeof obj["name"] !== "string") throw GateDefinition.JSONSyntaxError("expected a string as name");
+                if (!tsJSON.isJSONArray(obj["inputDims"])) throw GateDefinition.JSONSyntaxError("expected an array as input dims");
+                if (!tsJSON.isJSONArray(obj["outputDims"])) throw GateDefinition.JSONSyntaxError("expected an array as output dims");
+                if (!tsJSON.isJSONArray(obj["inputLabels"])) throw GateDefinition.JSONSyntaxError("expected an array as input labels");
+                if (!tsJSON.isJSONArray(obj["outputLabels"])) throw GateDefinition.JSONSyntaxError("expected an array as output labels");
+                if (typeof obj["source"] !== "number") throw GateDefinition.JSONSyntaxError("expected a number as source uid");
+                if (typeof obj["sink"] !== "number") throw GateDefinition.JSONSyntaxError("expected a number as sink uid");
+                if (!tsJSON.isJSONObj(obj["gates"])) throw GateDefinition.JSONSyntaxError("expected an object as gates dict");
+                if (!tsJSON.isJSONObj(obj["connections"])) throw GateDefinition.JSONSyntaxError("expected an object as connections dict");
+                if (!tsJSON.isJSONObj(obj["state"])) throw GateDefinition.JSONSyntaxError("expected an object as state dict");
+
+                // Deserialize input dimensions
+                const inputDims: GateDim[] = [];
+                for (const dim of obj["inputDims"]) {
+                    if (!isGateDim(dim)) throw DirectedGraph.JSONSyntaxError("expected input dimension to be an integer");
+                    inputDims.push(Number(dim));
+                }
+
+                // Deserialize output dimensions
+                const outputDims: GateDim[] = [];
+                for (const dim of obj["outputDims"]) {
+                    if (!isGateDim(dim)) throw DirectedGraph.JSONSyntaxError("expected output dimension to be an integer");
+                    outputDims.push(Number(dim));
+                }
+
+                // Deserialize input labels
+                const inputLabels: string[] = [];
+                for (const label of obj["inputLabels"]) {
+                    if (typeof label !== "string") throw DirectedGraph.JSONSyntaxError("expected input label to be a string");
+                    inputLabels.push(label);
+                }
+
+                // Deserialize output labels
+                const outputLabels: string[] = [];
+                for (const label of obj["outputLabels"]) {
+                    if (typeof label !== "string") throw DirectedGraph.JSONSyntaxError("expected output label to be a string");
+                    outputLabels.push(label);
+                }
+
+                // Create definition
+                const definition = new GateDefinition(obj["name"], project, inputDims, outputDims, inputLabels, outputLabels);
+                gates.set(obj["source"], definition._source);
+                gates.set(obj["sink"], definition._sink);
+
+                // Create gates
+                for (const oldUid in obj["gates"]) {
+                    if (!Number.isInteger(Number(oldUid))) throw DirectedGraph.JSONSyntaxError("expected an integer as an element in values of edge dict");
+                    const gateObj = obj["gates"][oldUid]
+                    if (!tsJSON.isJSONObj(gateObj)) throw GateDefinition.JSONSyntaxError("expected an object as gate object");
+                    let gate: Gate | undefined = undefined;
+                    for (const key in gateObj) {
+                        if (key[0] === "/" && project.has(key.substring(1))) {
+                            const definition = project.get(key.substring(1))!;
+                            gate = (definition as GateDefinition).getReviver().bind(obj["gates"])(oldUid, gateObj) as Gate;
+                            break;
+                        }
+                    }
+                    if (gate === undefined) throw GateDefinition.JSONSyntaxError(`could not deserialize gate: ${gateObj}`);
+                    gates.set(Number(oldUid), gate);
+                    definition.addGate(gate);
+                }
+
+                // Add connections
+                for (const fromUid in obj["connections"]) {
+                    if (!Number.isInteger(Number(fromUid))) throw GateDefinition.JSONSyntaxError("expected integer as from uid");
+                    if (!tsJSON.isJSONObj(obj["connections"][fromUid])) throw GateDefinition.JSONSyntaxError("expected an object in connections");
+                    for (const toUid in obj["connections"][fromUid]) {
+                        if (!Number.isInteger(Number(toUid))) throw GateDefinition.JSONSyntaxError("expected integer as to uid");
+                        if (!tsJSON.isJSONArray(obj["connections"][fromUid][toUid])) throw GateDefinition.JSONSyntaxError("expected an array in connections");
+                        for (const pair of obj["connections"][fromUid][toUid]) {
+                            if (!tsJSON.isJSONArray(pair)) throw GateDefinition.JSONSyntaxError("expected an array as input idx, output idx pair");
+                            if (typeof pair[0] !== "number") throw GateDefinition.JSONSyntaxError("expected an integer as output idx");
+                            if (typeof pair[1] !== "number") throw GateDefinition.JSONSyntaxError("expected an integer as input idx");
+                            const [outputIdx, inputIdx] = pair;
+                            const fromGate = gates.get(Number(fromUid))!;
+                            const toGate = gates.get(Number(toUid))!;
+                            definition.addConnection([fromGate, outputIdx], [inputIdx, toGate]);
+                        }
+                    }
+                }
+
+                // Add inputs and outputs
+                if (!tsJSON.isJSONArray(obj["state"]["inputs"])) throw GateDefinition.JSONSyntaxError("expected an array as inputs");
+                if (!tsJSON.isJSONArray(obj["state"]["outputs"])) throw GateDefinition.JSONSyntaxError("expected an array as outputs");
+                definition._state.inputs = Gate.validateGateData(obj["state"]["inputs"], inputDims);
+                definition._state.outputs = Gate.validateGateData(obj["state"]["outputs"], outputDims);
+
+                // Add gate states
+                if (!tsJSON.isJSONObj(obj["state"]["gates"])) throw GateDefinition.JSONSyntaxError("expected an object as gates state");
+                definition._state.gates = definition.reviveState(obj["state"]["gates"], gates)!;
+
+                return definition;
+            } else {
+                return value;
+            }
+        };
+        return reviver;
+    }
+
+    reviveState(this: GateDefinition, obj: JSONValue, gates: Map<number, Gate>): GateStateMap | null {
+        if (obj === null) {
+            return null
+        } else if (tsJSON.isJSONObj(obj)) {
+            const state: GateStateMap = new Map();
+            for (const oldUid in obj) {
+                if (!Number.isInteger(Number(oldUid))) throw this.JSONSyntaxError("expected integer as uid");
+                const gate = gates.get(Number(oldUid));
+                if (gate === undefined) throw this.JSONSyntaxError(`Could not find gate whose old uid was ${oldUid}`);
+                if (!tsJSON.isJSONArray(obj[oldUid])) throw this.JSONSyntaxError(`expected array as gate state for ${gate}`);
+                const gateStateObj = obj[oldUid][0];
+                let outputs: GateData | null;
+                if (tsJSON.isJSONArray(obj[oldUid][1])) {
+                    outputs = Gate.validateGateData(obj[oldUid][1], gate.outputDims);
+                } else if (obj[oldUid][1] === null) {
+                    outputs = null;
+                } else {
+                    throw this.JSONSyntaxError(`expected array or null as gate outputs for ${gate}`);
+                }
+                if (!this._project.has(gate.name)) throw this.JSONSyntaxError(`could not find gate type ${gate.name}`);
+                const definition = this._project.get(gate.name)!;
+                const gateState = (definition as GateDefinition).reviveState(gateStateObj, gates);
+                state.set(gate.uid, [gateState, outputs]);
+            }
+            return state;
+        } else {
+            throw this.JSONSyntaxError("expected object as state");
+        }
+    }
+
+    JSONSyntaxError(this: GateDefinition, msg: string): SyntaxError {
+        return new SyntaxError(`${this.name} reviver: ${msg}`);
+    }
+
+    getReviver(this: GateDefinition): JSONReviver<CompoundGate> {
+        const that = this;
+        const reviver: JSONReviver<CompoundGate> = function (this, key, value) {
+            if (tsJSON.isJSONObj(value) && value[`/${that.name}`] !== undefined) {
+                const obj = value[`/${that.name}`];
+                if (obj !== null) throw that.JSONSyntaxError("expected null as top level object");
+                return that.create();
+            }   
+        }
+        return reviver;
+    }
 
     get name(): string {
         return this._name;
@@ -804,6 +1468,14 @@ class GateDefinition implements JSONSerializable {
 
     get outputLabels() {
         return this._outputLabels
+    }
+
+    get numInputs() {
+        return this._inputDims.length;
+    }
+
+    get numOutputs() {
+        return this._outputDims.length;
     }
 
     get gates() {
@@ -830,35 +1502,240 @@ class GateDefinition implements JSONSerializable {
         return this._graph;
     }
 
-    getGatePredecessors(this: GateDefinition, uid: GateUID): Set<GateUID> {}
+    /**
+     * Return the direct predecessors for a gate given its uid
+     * 
+     * @param uid
+     */
+    getGatePredecessors(this: GateDefinition, uid: GateUID): Set<GateUID> {
+        return this._graph.getDirectPredecessors(uid);
+    }
 
-    getGateSuccessors(this: GateDefinition, uid: GateUID): Set<GateUID> {}
+    /**
+     * Return the direct successors for a gate given its uid
+     *
+     * @param uid
+     */
+    getGateSuccessors(this: GateDefinition, uid: GateUID): Set<GateUID> {
+        return this._graph.getDirectSuccessors(uid);
+    }
 
-    getGateInputs(this: GateDefinition, uid: GateUID): GateData {}
+    /**
+     * Get the current inputs for a gate given its uid
+     * 
+     * @param uid
+     */
+    getGateInputs(this: GateDefinition, uid: GateUID): GateData {
+        if (uid === this._sink.uid) {
+            return this._state.outputs;
+        } else if (uid === this._source.uid) {
+            return [];
+        } else {
+            // Get the inputs to the gate from its predecessors
+            const inputs: GateData = this._gates.get(uid)!._initInputs();
+            for (const predecessor of this._graph.getDirectPredecessors(uid)) {
+                for (const [outputIdx, inputIdx] of this._connections.get([predecessor, uid])!) {
+                    if (predecessor === this._source.uid) {
+                        inputs[inputIdx] = this._state.inputs[outputIdx];
+                    } else if (this._state.gates.has(predecessor)) {
+                        const outputs = this._state.gates.get(predecessor)![1];
+                        if (outputs === null) throw new Error("Gate definition instance state should not have null outputs");
+                        inputs[inputIdx] = outputs[outputIdx];
+                    } else {
+                        throw new Error("Invalid definition state");
+                    }
+                }
+            }
+            return inputs;
+        }
+    }
 
-    getGateOutputs(this: GateDefinition, uid: GateUID): GateData {}
+    /**
+     * Get the current outputs for a gate given its uid
+     * 
+     * @param uid
+     */
+    getGateOutputs(this: GateDefinition, uid: GateUID): GateData {
+        if (uid === this._source.uid) {
+            return this._state.inputs;
+        } else if (uid === this._sink.uid) {
+            return [];
+        } else {
+            const outputs = this._state.gates.get(uid)![1];
+            if (outputs === null) throw new Error("Gate definition instance state should not have null outputs");
+            return outputs;
+        }
+    }
 
-    getGateState(this: GateDefinition, uid: GateUID): GateState {}
+    /**
+     * Get the current state for a gate given its uid
+     * 
+     * @param uid
+     */
+    getGateState(this: GateDefinition, uid: GateUID): GateState {
+        if (uid === this._source.uid) {
+            return this._state.inputs;
+        } else if (uid === this._sink.uid) {
+            return this._state.outputs;
+        } else {
+            return this._state.gates.get(uid)![0];
+        }
+    }
 
-    setGateState(this: GateDefinition, uid: GateUID, state: GateState) {}
+    /**
+     * Set the current state for a gate given its uid
+     * 
+     * @param uid
+     * @param state
+     */
+    setGateState(this: GateDefinition, uid: GateUID, state: GateState) {
+        if (uid === this._source.uid) {
+            if (!isGateData(state)) throw new Error("State must gate data to assign to inputs");
+            this._state.inputs = state;
+        } else if (uid === this._sink.uid) {
+            if (!isGateData(state)) throw new Error("State must gate data to assign to outputs");
+            this._state.outputs = state;
+        } else {
+            this._state.gates.get(uid)!.splice(0, 1, state);
+        }
+    }
 
-    getToPairs(this: GateDefinition, fromPair: FromPair): ToPair[] {}
+    /**
+     * Given a from pair, return the to pairs
+     * 
+     * @param this
+     * @param fromPair
+     */
+    getToPairs(this: GateDefinition, fromPair: FromPair): ToPair[] {
+        this._validateFromPair(fromPair);
+        const [fromGate, outputIdx] = fromPair;
+        const toPairs: ToPair[] = [];
+        for (const successor of this._graph.getDirectSuccessors(fromGate.uid)) {
+            const pairs = this._connections.get([fromGate.uid, successor]);
+            if (pairs !== undefined) {
+                for (const [idx, inputIdx] of pairs) {
+                    if (idx === outputIdx) {
+                        toPairs.push([inputIdx, this._gates.get(successor)!]);
+                    }
+                }
+            }
+        }
+        return toPairs;
+    }
 
-    getFromPairs(this: GateDefinition, toPair: ToPair): FromPair[] {}
+    /**
+     * Given a to pair, if the input is connected to something, return a from pair
+     * 
+     * @param toPair
+     */
+    getFromPairs(this: GateDefinition, toPair: ToPair): FromPair | null {
+        this._validateToPair(toPair);
+        const [inputIdx, toGate] = toPair;
+        for (const predecessor of this._graph.getDirectPredecessors(toGate.uid)) {
+            const pairs = this._connections.get([predecessor, toGate.uid]);
+            if (pairs !== undefined) {
+                for (const [outputIdx, idx] of pairs) {
+                    if (idx === inputIdx) {
+                        return [this._gates.get(predecessor)!, outputIdx];
+                    }
+                }
+            }
+        }
+        return null;
+    }
 
-    resetGateState(this: GateDefinition, state: GateState) {}
+    resetGateState(this: GateDefinition, gate: Gate) {
+        if (!this._gates.has(gate.uid)) {
+            throw new Error(`${gate} is not in the definition`);
+        }
 
-    resetState(this: GateDefinition) {}
+        // Replace old state with new state
+        const gateState = gate._initState();
+        if (gate === this._source) {
+            this._state.inputs = gateState as GateData;
+        } else if (gate === this._sink) {
+            this._state.outputs = gateState as GateData;
+        } else {
+            this._state.gates.set(gate.uid, [gateState, gate.call(gate._initInputs(), gateState)]);
+        }
+    }
 
-    repairState(this: GateDefinition) {}
+    /**
+     * Reset state of all gates
+     */
+    resetState(this: GateDefinition) {
+        for (const gate of this._gates.values()) {
+            this.resetGateState(gate);
+        }
+        this._reorder = true;  // Reevaluate the order
+    }
 
-    _repairInstances(this: GateDefinition, definitions: GateDefinition[]) {}
+    repairState(this: GateDefinition) {
+        // TODO implement something?
+    }
 
-    duplicateGate(this: GateDefinition, gate: Gate) {}
+    _repairInstances(this: GateDefinition, definitions: GateDefinition[]) {
+        this._runOnTypeStates(definitions, (gsMapVal) => {
+            const gateState = definitions[0]._initState();
+            const inputs = definitions[0]._initInputs();
+            return [gateState, definitions[0]._processState(inputs, gateState)];
+        })
+    }
 
-    call(this: GateDefinition): CompoundGate {}
+    repairInstances(this: GateDefinition) {
+        this._project._repairInstances(this);
+    }
 
-    toString(this: GateDefinition): string {}
+    duplicateGate(this: GateDefinition, gate: Gate): Gate {
+        if (gate === this._source) {
+            throw new Error("Cannot duplicate source gate");
+        } else if (gate === this._sink) {
+            throw new Error("Cannot duplicate sink gate");
+        }
+
+        const [gateState, outputs] = this._state.gates.get(gate.uid)!;
+        const duplicate = gate._duplicate();
+        const duplicateState = gate._duplicateState(gateState);
+        const duplicateOutputs = tsJSON.parse(tsJSON.stringify(outputs)) as GateData | null;
+        this.addGate(duplicate, duplicateState, duplicateOutputs === null ? undefined : duplicateOutputs);
+        return duplicate;
+    }
+
+    create(this: GateDefinition): CompoundGate {
+        const gate = CompoundGate.create(this);
+        this._instanceUids.add(gate.uid);
+        return gate;
+    }
+
+    toString(this: GateDefinition): string {
+        let s = "";
+        if (this.numInputs > 0) {
+            const inputs = this._state.inputs;
+            const strInputs: string[] = [];
+            for (const input of inputs) {
+                if (input === null) {
+                    strInputs.push("null");
+                } else {
+                    strInputs.push(input.join(""));
+                }
+            }
+            s += `${strInputs.join(", ")} \u2192 `;
+        }
+        s += `${this.name} Definition`;
+        if (this._outputDims.length > 0) {
+            const outputs = this._state.outputs;
+            const strOutputs: string[] = [];
+            for (const output of outputs) {
+                if (output === null) {
+                    strOutputs.push("null");
+                } else {
+                    strOutputs.push(output.join(""));
+                }
+            }
+            s += ` \u2192 ${strOutputs.join(", ")}`;
+        }
+        return s;
+    }
 }
 
 export default CompoundGate;

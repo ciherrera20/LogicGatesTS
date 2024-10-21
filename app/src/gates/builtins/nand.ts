@@ -10,16 +10,16 @@ class Nand extends Gate {
         return new Nand();
     }
 
-    call(this: Nand, inputs: [[GateDatum], [GateDatum]], state?: null): [[GateDatum]] {
-        if (typeof inputs[0][0] !== "number" || typeof inputs[1][0] !== "number") {
-            return [[null]];
+    call(this: Nand, inputs: [[GateDatum], [GateDatum]], state?: null): [[GateDatum] | null] {
+        if (inputs[0] === null || inputs[1] === null) {
+            return [null];
         } else {
             let bitmask: number = 1;  // Grab last bit only
             return [[~(inputs[0][0] & inputs[1][0]) & bitmask]];
         }
     }
 
-    toJSON(this: Nand): Exclude<JSONValue, JSONSerializable> {
+    toJSON(this: Nand): JSONValue {
         return {"/NAND": null};
     }
 
@@ -33,8 +33,8 @@ class Nand extends Gate {
 
     static reviver: JSONReviver<Nand> = function(this, key, value) {
         if (tsJSON.isJSONObj(value) && value["/NAND"] !== undefined) {
-            const nandObj = value["/NAND"];
-            if (nandObj !== null) throw Nand.JSONSyntaxError("expected null as top level object");
+            const obj = value["/NAND"];
+            if (obj !== null) throw Nand.JSONSyntaxError("expected null as top level object");
             return new Nand();
         } else {
             return value;
